@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Application {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      String
+  role         String
+  link         String?
+  stage        String   @default("applied") // applied, interview, rejected, offer
+  dateApplied  String   // YYYY-MM-DD local date
+  notes        String?
+  followUpDate String?  // YYYY-MM-DD local date
+
+  reminders    Reminder[]
+}
+
+model DailyGoal {
+  id          String @id @default(cuid())
+  date        String @unique // YYYY-MM-DD
+  targetCount Int    @default(5)
+}
+
+model DailyNote {
+  id   String @id @default(cuid())
+  date String @unique // YYYY-MM-DD
+  text String @default("")
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  date      String   // YYYY-MM-DD
+  time      String   // HH:MM (24h)
+  message   String
+  done      Boolean  @default(false)
+
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+}
