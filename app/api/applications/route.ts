@@ -9,10 +9,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date"); // YYYY-MM-DD
   const stage = searchParams.get("stage");
+  const q = searchParams.get("q");
 
   const where: any = {};
   if (date) where.dateApplied = date;
   if (stage) where.stage = stage;
+
+  if (q && q.trim()) {
+    const term = q.trim();
+    where.OR = [{ company: { contains: term } }, { role: { contains: term } }];
+  }
 
   const items = await prisma.application.findMany({
     where,

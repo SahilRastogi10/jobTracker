@@ -76,6 +76,20 @@ export default function ApplicationDetailPage() {
 
     const followDate = item.followUpDate ?? addDays(item.dateApplied, 7);
 
+    // Duplicate check: reminder already exists for this application on this date
+    const checkRes = await fetch(
+      `/api/reminders/exists?applicationId=${encodeURIComponent(
+        item.id
+      )}&date=${encodeURIComponent(followDate)}`
+    );
+    const checkData = await checkRes.json();
+
+    if (checkData.exists) {
+      setCreatingFU(false);
+      alert("A follow up reminder already exists for this date.");
+      return;
+    }
+
     // If followUpDate was empty, save it
     if (!item.followUpDate) {
       const res = await fetch(`/api/applications/${item.id}`, {

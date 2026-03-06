@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Application = {
   id: string;
@@ -14,19 +14,43 @@ type Application = {
 export default function ApplicationsPage() {
   const [items, setItems] = useState<Application[]>([]);
   const [stage, setStage] = useState<string>("");
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function load() {
+  const reqIdRef = useRef(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  async function load(activeStage: string, activeQ: string) {
+    const myReqId = ++reqIdRef.current;
+    setLoading(true);
+
     const qs = new URLSearchParams();
-    if (stage) qs.set("stage", stage);
+    if (activeStage) qs.set("stage", activeStage);
+    if (activeQ.trim()) qs.set("q", activeQ.trim());
 
-    const res = await fetch(`/api/applications?${qs.toString()}`);
-    const data = await res.json();
-    setItems(data.items ?? []);
+    try {
+      const res = await fetch(`/api/applications?${qs.toString()}`);
+      const data = await res.json();
+
+      // only apply latest response
+      if (myReqId === reqIdRef.current) {
+        setItems(data.items ?? []);
+      }
+    } finally {
+      if (myReqId === reqIdRef.current) {
+        setLoading(false);
+      }
+    }
   }
 
   useEffect(() => {
-    load();
-  }, [stage]);
+    load(stage, debouncedQ);
+  }, [stage, debouncedQ]);
 
   const grouped = useMemo(() => {
     const m: Record<string, Application[]> = {};
@@ -36,10 +60,15 @@ export default function ApplicationsPage() {
     return m;
   }, [items]);
 
+  const hasFilters = stage !== "" || debouncedQ.trim() !== "";
+
   return (
     <main className="p-6 max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-semibold">Applications</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-semibold">Applications</h1>
+          {loading ? <div className="text-sm opacity-70">Searching...</div> : null}
+        </div>
 
         <div className="flex gap-3 items-center flex-wrap">
           <a className="underline text-sm" href="/">
@@ -54,6 +83,16 @@ export default function ApplicationsPage() {
           <a className="underline text-sm" href="/api/export/applications">
             Export CSV
           </a>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm opacity-70">Search</label>
+            <input
+              className="border rounded px-2 py-1"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Company or role"
+            />
+          </div>
 
           <div className="flex items-center gap-2">
             <label className="text-sm opacity-70">Stage</label>
@@ -73,7 +112,9 @@ export default function ApplicationsPage() {
       </div>
 
       {items.length === 0 ? (
-        <div className="opacity-70">No applications yet.</div>
+        <div className="opacity-70">
+          {hasFilters ? "No results." : "No applications yet."}
+        </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(grouped).map(([k, list]) => (
