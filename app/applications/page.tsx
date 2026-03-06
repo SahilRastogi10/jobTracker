@@ -41,19 +41,34 @@ export default function ApplicationsPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold">Applications</h1>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm opacity-70">Stage</label>
-          <select
-            className="border rounded px-2 py-1"
-            value={stage}
-            onChange={(e) => setStage(e.target.value)}
-          >
-            <option value="">All</option>
-            <option value="applied">applied</option>
-            <option value="interview">interview</option>
-            <option value="rejected">rejected</option>
-            <option value="offer">offer</option>
-          </select>
+        <div className="flex gap-3 items-center flex-wrap">
+          <a className="underline text-sm" href="/">
+            Home
+          </a>
+          <a className="underline text-sm" href="/calendar">
+            Calendar
+          </a>
+          <a className="underline text-sm" href="/reminders">
+            Reminders
+          </a>
+          <a className="underline text-sm" href="/api/export/applications">
+            Export CSV
+          </a>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm opacity-70">Stage</label>
+            <select
+              className="border rounded px-2 py-1"
+              value={stage}
+              onChange={(e) => setStage(e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="applied">applied</option>
+              <option value="interview">interview</option>
+              <option value="rejected">rejected</option>
+              <option value="offer">offer</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -77,10 +92,7 @@ export default function ApplicationsPage() {
                         </div>
                       </div>
 
-                      <a
-                        className="underline text-sm"
-                        href={`/applications/${a.id}`}
-                      >
+                      <a className="underline text-sm" href={`/applications/${a.id}`}>
                         Edit
                       </a>
                     </div>
