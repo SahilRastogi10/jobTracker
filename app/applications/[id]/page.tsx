@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { PageFrame } from "@/components/PageFrame";
 
 type Application = {
   id: string;
@@ -9,9 +11,9 @@ type Application = {
   role: string;
   link?: string | null;
   stage: string;
-  dateApplied: string; // YYYY-MM-DD
+  dateApplied: string;
   notes?: string | null;
-  followUpDate?: string | null; // YYYY-MM-DD
+  followUpDate?: string | null;
 };
 
 function addDays(ymd: string, days: number): string {
@@ -22,6 +24,20 @@ function addDays(ymd: string, days: number): string {
   const mm = String(dt.getMonth() + 1).padStart(2, "0");
   const dd = String(dt.getDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
+}
+
+function stageBadgeClass(stage: string) {
+  switch (stage) {
+    case "interview":
+      return "badge badge-interview";
+    case "offer":
+      return "badge badge-offer";
+    case "rejected":
+      return "badge badge-rejected";
+    case "applied":
+    default:
+      return "badge badge-applied";
+  }
 }
 
 export default function ApplicationDetailPage() {
@@ -45,7 +61,7 @@ export default function ApplicationDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    load(id);
+    void load(id);
   }, [id]);
 
   async function save(patch: Partial<Application>) {
@@ -76,7 +92,6 @@ export default function ApplicationDetailPage() {
 
     const followDate = item.followUpDate ?? addDays(item.dateApplied, 7);
 
-    // Duplicate check: reminder already exists for this application on this date
     const checkRes = await fetch(
       `/api/reminders/exists?applicationId=${encodeURIComponent(
         item.id
@@ -90,7 +105,6 @@ export default function ApplicationDetailPage() {
       return;
     }
 
-    // If followUpDate was empty, save it
     if (!item.followUpDate) {
       const res = await fetch(`/api/applications/${item.id}`, {
         method: "PATCH",
@@ -103,7 +117,6 @@ export default function ApplicationDetailPage() {
       }
     }
 
-    // Create reminder linked to application
     await fetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,133 +132,183 @@ export default function ApplicationDetailPage() {
     alert(`Follow up reminder created for ${followDate}`);
   }
 
-  if (!id) return <main className="p-6 max-w-3xl mx-auto">Loading...</main>;
-  if (!item) return <main className="p-6 max-w-3xl mx-auto">Loading...</main>;
+  if (!id) {
+    return (
+      <PageFrame
+        title="Loading application"
+        subtitle="Pulling application details into the editor."
+      >
+        <section className="panel-card">
+          <div className="empty-state">Loading...</div>
+        </section>
+      </PageFrame>
+    );
+  }
+
+  if (!item) {
+    return (
+      <PageFrame
+        title="Application not found"
+        subtitle="The record could not be loaded."
+        actions={
+          <Link href="/applications" className="app-button-secondary">
+            Back to Applications
+          </Link>
+        }
+      >
+        <section className="panel-card">
+          <div className="empty-state">Loading...</div>
+        </section>
+      </PageFrame>
+    );
+  }
 
   return (
-    <main className="p-6 max-w-3xl mx-auto space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-semibold">Edit</h1>
-
-        <div className="flex gap-3 flex-wrap">
-          <a className="underline text-sm" href="/">
-            Home
-          </a>
-          <a className="underline text-sm" href="/calendar">
-            Calendar
-          </a>
-          <a className="underline text-sm" href="/reminders">
-            Reminders
-          </a>
-          <a className="underline text-sm" href="/applications">
+    <PageFrame
+      title={`${item.company}`}
+      subtitle="Edit the record, keep follow-up timing tight, and capture notes while the context is fresh."
+      actions={
+        <>
+          <span className={stageBadgeClass(item.stage)}>{item.stage}</span>
+          <Link href="/applications" className="app-button-secondary">
             Back
-          </a>
-        </div>
-      </div>
-
-      <section className="border rounded p-4 space-y-3">
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Company</label>
-          <input
-            className="border rounded px-3 py-2"
-            value={item.company}
-            onChange={(e) => setItem({ ...item, company: e.target.value })}
-            onBlur={() => save({ company: item.company })}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Role</label>
-          <input
-            className="border rounded px-3 py-2"
-            value={item.role}
-            onChange={(e) => setItem({ ...item, role: e.target.value })}
-            onBlur={() => save({ role: item.role })}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Link</label>
-          <input
-            className="border rounded px-3 py-2"
-            value={item.link ?? ""}
-            onChange={(e) => setItem({ ...item, link: e.target.value })}
-            onBlur={() => save({ link: item.link ?? "" })}
-            placeholder="https://..."
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Stage</label>
-          <select
-            className="border rounded px-3 py-2"
-            value={item.stage}
-            onChange={(e) => {
-              const v = e.target.value;
-              setItem({ ...item, stage: v });
-              save({ stage: v });
-            }}
-          >
-            <option value="applied">applied</option>
-            <option value="interview">interview</option>
-            <option value="rejected">rejected</option>
-            <option value="offer">offer</option>
-          </select>
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Applied date</label>
-          <input
-            className="border rounded px-3 py-2"
-            type="date"
-            value={item.dateApplied}
-            onChange={(e) => setItem({ ...item, dateApplied: e.target.value })}
-            onBlur={() => save({ dateApplied: item.dateApplied })}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Follow up date</label>
-          <input
-            className="border rounded px-3 py-2"
-            type="date"
-            value={item.followUpDate ?? ""}
-            onChange={(e) => setItem({ ...item, followUpDate: e.target.value })}
-            onBlur={() => save({ followUpDate: item.followUpDate ?? "" })}
-          />
-        </div>
-
-        <div className="border rounded p-3 space-y-2">
-          <div className="font-medium">Quick follow up</div>
-          <div className="text-sm opacity-70">
-            Creates a reminder for the follow up date. If empty, uses applied date + 7 days.
+          </Link>
+        </>
+      }
+    >
+      <section className="panel-card space-y-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="field-label" htmlFor="company">
+              Company
+            </label>
+            <input
+              id="company"
+              className="field-input"
+              value={item.company}
+              onChange={(e) => setItem({ ...item, company: e.target.value })}
+              onBlur={() => save({ company: item.company })}
+            />
           </div>
-          <button
-            className="border rounded px-3 py-2"
-            onClick={quickFollowUp}
-            disabled={creatingFU}
-          >
-            {creatingFU ? "Creating..." : "Create follow up reminder"}
-          </button>
+
+          <div>
+            <label className="field-label" htmlFor="role">
+              Role
+            </label>
+            <input
+              id="role"
+              className="field-input"
+              value={item.role}
+              onChange={(e) => setItem({ ...item, role: e.target.value })}
+              onBlur={() => save({ role: item.role })}
+            />
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="link">
+              Job Link
+            </label>
+            <input
+              id="link"
+              className="field-input"
+              value={item.link ?? ""}
+              onChange={(e) => setItem({ ...item, link: e.target.value })}
+              onBlur={() => save({ link: item.link ?? "" })}
+              placeholder="https://..."
+            />
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="stage">
+              Stage
+            </label>
+            <select
+              id="stage"
+              className="field-select"
+              value={item.stage}
+              onChange={(e) => {
+                const value = e.target.value;
+                setItem({ ...item, stage: value });
+                void save({ stage: value });
+              }}
+            >
+              <option value="applied">applied</option>
+              <option value="interview">interview</option>
+              <option value="rejected">rejected</option>
+              <option value="offer">offer</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="date-applied">
+              Applied Date
+            </label>
+            <input
+              id="date-applied"
+              className="field-input"
+              type="date"
+              value={item.dateApplied}
+              onChange={(e) => setItem({ ...item, dateApplied: e.target.value })}
+              onBlur={() => save({ dateApplied: item.dateApplied })}
+            />
+          </div>
+
+          <div>
+            <label className="field-label" htmlFor="follow-up-date">
+              Follow-up Date
+            </label>
+            <input
+              id="follow-up-date"
+              className="field-input"
+              type="date"
+              value={item.followUpDate ?? ""}
+              onChange={(e) => setItem({ ...item, followUpDate: e.target.value })}
+              onBlur={() => save({ followUpDate: item.followUpDate ?? "" })}
+            />
+          </div>
         </div>
 
-        <div className="grid gap-2">
-          <label className="text-sm opacity-70">Notes</label>
+        <div className="list-card space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="section-title">Quick follow-up</div>
+              <p className="section-subtitle">
+                Create a linked reminder using the existing follow-up date, or default to seven days after applying.
+              </p>
+            </div>
+
+            <button
+              className="app-button"
+              onClick={quickFollowUp}
+              disabled={creatingFU}
+            >
+              {creatingFU ? "Creating..." : "Create reminder"}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="notes">
+            Notes
+          </label>
           <textarea
-            className="border rounded px-3 py-2 min-h-[120px]"
+            id="notes"
+            className="field-textarea"
             value={item.notes ?? ""}
             onChange={(e) => setItem({ ...item, notes: e.target.value })}
             onBlur={() => save({ notes: item.notes ?? "" })}
           />
         </div>
 
-        <div className="flex items-center justify-between">
-          <button className="border rounded px-3 py-2" onClick={remove}>
-            Delete
+        <div className="soft-divider" />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button className="app-button-secondary" onClick={remove}>
+            Delete application
           </button>
-          <div className="text-sm opacity-70">{saving ? "Saving..." : ""}</div>
+          <div className="badge badge-neutral">{saving ? "Saving..." : "All changes saved"}</div>
         </div>
       </section>
-    </main>
+    </PageFrame>
   );
 }

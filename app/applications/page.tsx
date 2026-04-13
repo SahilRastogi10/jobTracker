@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PageFrame } from "@/components/PageFrame";
 
 type Application = {
   id: string;
@@ -10,6 +12,20 @@ type Application = {
   dateApplied: string;
   followUpDate?: string | null;
 };
+
+function stageBadgeClass(stage: string) {
+  switch (stage) {
+    case "interview":
+      return "badge badge-interview";
+    case "offer":
+      return "badge badge-offer";
+    case "rejected":
+      return "badge badge-rejected";
+    case "applied":
+    default:
+      return "badge badge-applied";
+  }
+}
 
 export default function ApplicationsPage() {
   const [items, setItems] = useState<Application[]>([]);
@@ -37,7 +53,6 @@ export default function ApplicationsPage() {
       const res = await fetch(`/api/applications?${qs.toString()}`);
       const data = await res.json();
 
-      // only apply latest response
       if (myReqId === reqIdRef.current) {
         setItems(data.items ?? []);
       }
@@ -49,13 +64,13 @@ export default function ApplicationsPage() {
   }
 
   useEffect(() => {
-    load(stage, debouncedQ);
+    void load(stage, debouncedQ);
   }, [stage, debouncedQ]);
 
   const grouped = useMemo(() => {
     const m: Record<string, Application[]> = {};
-    for (const it of items) {
-      (m[it.stage] ??= []).push(it);
+    for (const item of items) {
+      (m[item.stage] ??= []).push(item);
     }
     return m;
   }, [items]);
@@ -63,41 +78,40 @@ export default function ApplicationsPage() {
   const hasFilters = stage !== "" || debouncedQ.trim() !== "";
 
   return (
-    <main className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-semibold">Applications</h1>
-          {loading ? <div className="text-sm opacity-70">Searching...</div> : null}
-        </div>
-
-        <div className="flex gap-3 items-center flex-wrap">
-          <a className="underline text-sm" href="/">
-            Home
-          </a>
-          <a className="underline text-sm" href="/calendar">
-            Calendar
-          </a>
-          <a className="underline text-sm" href="/reminders">
-            Reminders
-          </a>
-          <a className="underline text-sm" href="/api/export/applications">
+    <PageFrame
+      title="Applications"
+      subtitle="Search by company or role, slice the list by stage, and keep your pipeline readable as it grows."
+      actions={
+        <>
+          {loading ? <div className="badge badge-neutral">Searching...</div> : null}
+          <Link href="/api/export/applications" className="app-button">
             Export CSV
-          </a>
-
-          <div className="flex items-center gap-2">
-            <label className="text-sm opacity-70">Search</label>
+          </Link>
+        </>
+      }
+    >
+      <section className="panel-card space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px] flex-1">
+            <label className="field-label" htmlFor="search">
+              Search
+            </label>
             <input
-              className="border rounded px-2 py-1"
+              id="search"
+              className="field-input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Company or role"
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm opacity-70">Stage</label>
+          <div className="min-w-[190px]">
+            <label className="field-label" htmlFor="stage">
+              Stage
+            </label>
             <select
-              className="border rounded px-2 py-1"
+              id="stage"
+              className="field-select"
               value={stage}
               onChange={(e) => setStage(e.target.value)}
             >
@@ -108,34 +122,61 @@ export default function ApplicationsPage() {
               <option value="offer">offer</option>
             </select>
           </div>
+
+          <div className="mini-stat min-w-[180px]">
+            <div className="mini-stat-label">Visible</div>
+            <div className="mini-stat-value">{items.length}</div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {items.length === 0 ? (
-        <div className="opacity-70">
-          {hasFilters ? "No results." : "No applications yet."}
-        </div>
+        <section className="panel-card">
+          <div className="empty-state">
+            {hasFilters ? "No results matched those filters." : "No applications yet."}
+          </div>
+        </section>
       ) : (
-        <div className="space-y-6">
-          {Object.entries(grouped).map(([k, list]) => (
-            <section key={k} className="space-y-2">
-              <h2 className="text-lg font-medium">{k}</h2>
-              <ul className="space-y-2">
-                {list.map((a) => (
-                  <li key={a.id} className="border rounded p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{a.company}</div>
-                        <div className="opacity-80">{a.role}</div>
-                        <div className="text-sm opacity-70">
-                          Applied: {a.dateApplied}
-                          {a.followUpDate ? ` | Follow up: ${a.followUpDate}` : ""}
+        <div className="space-y-5">
+          {Object.entries(grouped).map(([group, list]) => (
+            <section key={group} className="panel-card space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className={stageBadgeClass(group)}>{group}</span>
+                  <div className="section-subtitle">{list.length} tracked</div>
+                </div>
+              </div>
+
+              <ul className="space-y-3">
+                {list.map((application) => (
+                  <li key={application.id} className="list-card">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-lg font-semibold">{application.company}</div>
+                          <div className="section-subtitle">{application.role}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <span className={stageBadgeClass(application.stage)}>
+                            {application.stage}
+                          </span>
+                          <span className="badge badge-neutral">
+                            Applied {application.dateApplied}
+                          </span>
+                          {application.followUpDate ? (
+                            <span className="badge badge-neutral">
+                              Follow up {application.followUpDate}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
-                      <a className="underline text-sm" href={`/applications/${a.id}`}>
+                      <Link
+                        href={`/applications/${application.id}`}
+                        className="app-button-secondary"
+                      >
                         Edit
-                      </a>
+                      </Link>
                     </div>
                   </li>
                 ))}
@@ -144,6 +185,6 @@ export default function ApplicationsPage() {
           ))}
         </div>
       )}
-    </main>
+    </PageFrame>
   );
 }
