@@ -50,6 +50,11 @@ export async function POST(req: Request) {
       dateApplied: body.dateApplied ? String(body.dateApplied) : localYYYYMMDD(),
       notes: body.notes ? String(body.notes) : null,
       followUpDate: body.followUpDate ? String(body.followUpDate) : null,
+      recruiterName: body.recruiterName ? String(body.recruiterName).trim() : null,
+      recruiterTitle: body.recruiterTitle ? String(body.recruiterTitle).trim() : null,
+      recruiterEmail: body.recruiterEmail ? String(body.recruiterEmail).trim() : null,
+      recruiterLinkedIn: body.recruiterLinkedIn ? String(body.recruiterLinkedIn).trim() : null,
+      recruiterSource: body.recruiterSource ? String(body.recruiterSource) : null,
     },
   });
 

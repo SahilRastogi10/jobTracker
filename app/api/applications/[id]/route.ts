@@ -52,6 +52,36 @@ export async function PATCH(req: Request) {
             ? String(body.followUpDate)
             : null
           : undefined,
+      recruiterName:
+        body.recruiterName !== undefined
+          ? body.recruiterName
+            ? String(body.recruiterName).trim()
+            : null
+          : undefined,
+      recruiterTitle:
+        body.recruiterTitle !== undefined
+          ? body.recruiterTitle
+            ? String(body.recruiterTitle).trim()
+            : null
+          : undefined,
+      recruiterEmail:
+        body.recruiterEmail !== undefined
+          ? body.recruiterEmail
+            ? String(body.recruiterEmail).trim()
+            : null
+          : undefined,
+      recruiterLinkedIn:
+        body.recruiterLinkedIn !== undefined
+          ? body.recruiterLinkedIn
+            ? String(body.recruiterLinkedIn).trim()
+            : null
+          : undefined,
+      recruiterSource:
+        body.recruiterSource !== undefined
+          ? body.recruiterSource
+            ? String(body.recruiterSource)
+            : null
+          : undefined,
       dateApplied: body.dateApplied !== undefined ? String(body.dateApplied) : undefined,
     },
   });

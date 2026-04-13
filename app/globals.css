@@ -301,6 +301,37 @@ textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+.scroll-panel {
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.scroll-panel::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(25, 92, 80, 0.22);
+}
+
+.result-card-compact {
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  padding: 0.9rem;
+  background: rgba(255, 250, 242, 0.94);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.result-snippet {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
