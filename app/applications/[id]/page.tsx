@@ -50,6 +50,45 @@ type ContactResearchResponse = {
   companyPages: ContactResearchResult[];
 };
 
+type ContextDocumentSummary = {
+  id: string;
+  sourceType: string;
+  title: string;
+  url?: string | null;
+  updatedAt: string;
+  chunkCount: number;
+};
+
+type ContextStatus = {
+  documentCount: number;
+  chunkCount: number;
+  lastSyncedAt?: string | null;
+  documents: ContextDocumentSummary[];
+};
+
+type ContextStatusResponse = {
+  status: ContextStatus;
+  warnings?: string[];
+};
+
+type ApplicationAskResponse = {
+  answer: string;
+  matches: Array<{
+    id: string;
+    score: number;
+    content: string;
+    sourceType: string;
+    title: string;
+    url?: string | null;
+  }>;
+};
+
+const QUICK_RAG_PROMPTS = [
+  "Summarize this role and the biggest priorities.",
+  "Draft a short recruiter follow-up email for this application.",
+  "What skills or experience should I emphasize if I hear back?",
+] as const;
+
 function addDays(ymd: string, days: number): string {
   const [y, m, d] = ymd.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
@@ -100,6 +139,14 @@ function emailRelevanceLabel(score: number) {
   return "Company email";
 }
 
+function formatSourceType(sourceType: string) {
+  return sourceType
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -112,6 +159,17 @@ export default function ApplicationDetailPage() {
   const [researchError, setResearchError] = useState<string | null>(null);
   const [researchResults, setResearchResults] =
     useState<ContactResearchResponse | null>(null);
+  const [contextStatus, setContextStatus] = useState<ContextStatus | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [contextSyncing, setContextSyncing] = useState(false);
+  const [contextWarnings, setContextWarnings] = useState<string[]>([]);
+  const [contextError, setContextError] = useState<string | null>(null);
+  const [askQuestion, setAskQuestion] = useState<string>(
+    QUICK_RAG_PROMPTS[0]
+  );
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
+  const [askResult, setAskResult] = useState<ApplicationAskResponse | null>(null);
 
   async function load(appId: string) {
     const res = await fetch(`/api/applications/${appId}`);
@@ -123,9 +181,39 @@ export default function ApplicationDetailPage() {
     setItem(data.item ?? null);
   }
 
+  async function loadContextStatus(appId: string) {
+    setContextLoading(true);
+    setContextError(null);
+
+    try {
+      const res = await fetch(`/api/applications/${appId}/context`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "Could not load application context."
+        );
+      }
+
+      setContextStatus(data.status ?? null);
+      setContextWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+    } catch (error) {
+      setContextError(
+        error instanceof Error
+          ? error.message
+          : "Could not load application context."
+      );
+    } finally {
+      setContextLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!id) return;
     void load(id);
+    void loadContextStatus(id);
   }, [id]);
 
   async function save(patch: Partial<Application>) {
@@ -236,6 +324,82 @@ export default function ApplicationDetailPage() {
     const next = { ...item, ...patch };
     setItem(next);
     void save(patch);
+  }
+
+  async function syncApplicationContext() {
+    if (!item) return;
+
+    setContextSyncing(true);
+    setContextError(null);
+    setAskError(null);
+
+    try {
+      const res = await fetch(`/api/applications/${item.id}/context`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as ContextStatusResponse & {
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "Could not sync application context."
+        );
+      }
+
+      setContextStatus(data.status ?? null);
+      setContextWarnings(Array.isArray(data.warnings) ? data.warnings : []);
+    } catch (error) {
+      setContextError(
+        error instanceof Error
+          ? error.message
+          : "Could not sync application context."
+      );
+    } finally {
+      setContextSyncing(false);
+    }
+  }
+
+  async function askApplicationContext() {
+    if (!item) return;
+
+    const question = askQuestion.trim();
+    if (!question) {
+      setAskError("Ask a question first.");
+      return;
+    }
+
+    setAskLoading(true);
+    setAskError(null);
+
+    try {
+      const res = await fetch(`/api/applications/${item.id}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const data = (await res.json()) as ApplicationAskResponse & {
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(
+          typeof data?.error === "string"
+            ? data.error
+            : "Could not answer the question."
+        );
+      }
+
+      setAskResult(data);
+    } catch (error) {
+      setAskError(
+        error instanceof Error ? error.message : "Could not answer the question."
+      );
+    } finally {
+      setAskLoading(false);
+    }
   }
 
   if (!id) {
@@ -869,6 +1033,167 @@ export default function ApplicationDetailPage() {
             onChange={(e) => setItem({ ...item, notes: e.target.value })}
             onBlur={() => save({ notes: item.notes ?? "" })}
           />
+        </div>
+
+        <div className="list-card space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="section-title">Application assistant</div>
+              <p className="section-subtitle">
+                Sync the role link, notes, and recruiter details into retrievable context, then ask grounded questions about this application.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="badge badge-neutral">
+                {contextLoading
+                  ? "Loading context..."
+                  : contextStatus
+                    ? `${contextStatus.documentCount} docs • ${contextStatus.chunkCount} chunks`
+                    : "No context yet"}
+              </div>
+              <button
+                className="app-button"
+                onClick={syncApplicationContext}
+                disabled={contextSyncing}
+              >
+                {contextSyncing ? "Syncing..." : "Sync context"}
+              </button>
+            </div>
+          </div>
+
+          <div className="section-subtitle">
+            Re-sync after changing the job link, recruiter details, or notes.
+            {contextStatus?.lastSyncedAt
+              ? ` Last synced ${new Date(contextStatus.lastSyncedAt).toLocaleString()}.`
+              : null}
+          </div>
+
+          {contextError ? <div className="error-banner">{contextError}</div> : null}
+
+          {contextWarnings.length > 0 ? (
+            <div className="list-card space-y-2">
+              <div className="section-title">Sync notes</div>
+              {contextWarnings.map((warning) => (
+                <div key={warning} className="section-subtitle">
+                  {warning}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {contextStatus?.documents?.length ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {contextStatus.documents.map((document) => (
+                <div key={document.id} className="result-card-compact">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{document.title}</div>
+                      <div className="section-subtitle">
+                        {formatSourceType(document.sourceType)}
+                      </div>
+                    </div>
+                    <div className="badge badge-neutral">
+                      {document.chunkCount} chunks
+                    </div>
+                  </div>
+                  {document.url ? (
+                    <a
+                      className="subtle-link"
+                      href={document.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {formatSourceLabel(document.url, "Open source")}
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              Syncing creates indexed context from this application so the assistant can answer with sources.
+            </div>
+          )}
+
+          <div className="panel-card space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {QUICK_RAG_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="app-button-secondary"
+                  onClick={() => setAskQuestion(prompt)}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label className="field-label" htmlFor="ask-application">
+                Ask a question
+              </label>
+              <textarea
+                id="ask-application"
+                className="field-textarea"
+                value={askQuestion}
+                onChange={(e) => setAskQuestion(e.target.value)}
+                placeholder="What should I emphasize for this role?"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                className="app-button"
+                onClick={askApplicationContext}
+                disabled={askLoading}
+              >
+                {askLoading ? "Thinking..." : "Ask assistant"}
+              </button>
+            </div>
+
+            {askError ? <div className="error-banner">{askError}</div> : null}
+
+            {askResult ? (
+              <div className="space-y-4">
+                <div className="result-card-compact space-y-3">
+                  <div className="section-title">Answer</div>
+                  <div className="whitespace-pre-wrap">{askResult.answer}</div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="section-title">Retrieved sources</div>
+                  <div className="scroll-panel space-y-3">
+                    {askResult.matches.map((match) => (
+                      <div key={match.id} className="result-card-compact">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold">{match.title}</div>
+                            <div className="section-subtitle">
+                              {formatSourceType(match.sourceType)}
+                            </div>
+                          </div>
+                          <div className="badge badge-neutral">
+                            score {match.score}
+                          </div>
+                        </div>
+                        <div className="result-snippet">{match.content}</div>
+                        {match.url ? (
+                          <a
+                            className="subtle-link"
+                            href={match.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {formatSourceLabel(match.url, "Open source")}
+                          </a>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="soft-divider" />
