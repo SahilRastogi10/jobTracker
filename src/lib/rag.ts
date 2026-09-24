@@ -1,8 +1,13 @@
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
-const DEFAULT_RESPONSE_MODEL = "gpt-5.4-mini";
+const OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
+const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+const DEFAULT_OPENAI_RESPONSE_MODEL = "gpt-5.4-mini";
+const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text";
+const DEFAULT_OLLAMA_RESPONSE_MODEL = "qwen3:8b";
 const DEFAULT_CHUNK_SIZE = 1200;
 const DEFAULT_CHUNK_OVERLAP = 200;
+
+type RagProvider = "openai" | "ollama";
 
 type ResponsesContentItem = {
   type?: string;
@@ -30,22 +35,58 @@ type OpenAIEmbeddingsResult = {
   };
 };
 
-function requireApiKey() {
-  const apiKey = process.env.OPENAI_API_KEY;
+function getRagProvider(): RagProvider {
+  return process.env.RAG_PROVIDER?.toLowerCase() === "openai" ? "openai" : "ollama";
+}
+
+function getApiBaseUrl() {
+  return getRagProvider() === "ollama"
+    ? process.env.OLLAMA_BASE_URL ?? OLLAMA_BASE_URL
+    : process.env.OPENAI_BASE_URL ?? OPENAI_BASE_URL;
+}
+
+function getApiKey() {
+  if (getRagProvider() === "ollama") {
+    return process.env.OLLAMA_API_KEY?.trim() || null;
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY.");
+    throw new Error("Missing OPENAI_API_KEY for RAG_PROVIDER=openai.");
   }
 
   return apiKey;
 }
 
-async function openAIRequest<T>(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${OPENAI_BASE_URL}${path}`, {
+function getEmbeddingModel() {
+  return getRagProvider() === "ollama"
+    ? process.env.OLLAMA_RAG_EMBEDDING_MODEL ?? DEFAULT_OLLAMA_EMBEDDING_MODEL
+    : process.env.OPENAI_RAG_EMBEDDING_MODEL ?? DEFAULT_OPENAI_EMBEDDING_MODEL;
+}
+
+function getResponseModel() {
+  return getRagProvider() === "ollama"
+    ? process.env.OLLAMA_RAG_RESPONSE_MODEL ?? DEFAULT_OLLAMA_RESPONSE_MODEL
+    : process.env.OPENAI_RAG_RESPONSE_MODEL ?? DEFAULT_OPENAI_RESPONSE_MODEL;
+}
+
+function getReasoningEffort() {
+  return process.env.OPENAI_RAG_REASONING_EFFORT ?? "low";
+}
+
+async function ragRequest<T>(path: string, body: Record<string, unknown>) {
+  const apiKey = getApiKey();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${requireApiKey()}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
     cache: "no-store",
   });
@@ -58,7 +99,7 @@ async function openAIRequest<T>(path: string, body: Record<string, unknown>) {
     const message =
       typeof data?.error?.message === "string"
         ? data.error.message
-        : `OpenAI request failed with status ${res.status}.`;
+        : `RAG provider request failed with status ${res.status}.`;
     throw new Error(message);
   }
 
@@ -132,8 +173,8 @@ export function cosineSimilarity(left: number[], right: number[]) {
 export async function createEmbeddings(inputs: string[]) {
   if (inputs.length === 0) return [];
 
-  const data = await openAIRequest<OpenAIEmbeddingsResult>("/embeddings", {
-    model: process.env.OPENAI_RAG_EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL,
+  const data = await ragRequest<OpenAIEmbeddingsResult>("/embeddings", {
+    model: getEmbeddingModel(),
     input: inputs,
   });
 
@@ -174,22 +215,19 @@ export async function answerWithRetrievedContext(
 
   const userPrompt = `Question: ${question}\n\nContext:\n${context}`;
 
-  const data = await openAIRequest<OpenAIResponsesResult>("/responses", {
-    model: process.env.OPENAI_RAG_RESPONSE_MODEL ?? DEFAULT_RESPONSE_MODEL,
-    reasoning: {
-      effort: process.env.OPENAI_RAG_REASONING_EFFORT ?? "low",
-    },
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: systemPrompt }],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: userPrompt }],
-      },
-    ],
-  });
+  const body: Record<string, unknown> = {
+    model: getResponseModel(),
+    instructions: systemPrompt,
+    input: userPrompt,
+  };
+
+  if (getRagProvider() === "openai") {
+    body.reasoning = {
+      effort: getReasoningEffort(),
+    };
+  }
+
+  const data = await ragRequest<OpenAIResponsesResult>("/responses", body);
 
   const answer = extractOutputText(data);
   if (!answer) {

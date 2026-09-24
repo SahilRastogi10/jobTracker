@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Job Tracker
 
-## Getting Started
+A local-first job application tracker built with Next.js, Prisma, and SQLite. It tracks applications, follow-ups, reminders, daily notes and goals, and includes retrieval-grounded Q&A over each application's job posting, notes, and recruiter context.
 
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env
+pnpm prisma migrate dev
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## AI features (free, local by default)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The RAG features run on [Ollama](https://ollama.com) by default, so no paid API is needed.
 
-## Learn More
+1. Install Ollama and make sure it is running.
+2. Pull the default models:
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   ollama pull qwen3:8b
+   ollama pull nomic-embed-text
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. Keep `RAG_PROVIDER="ollama"` in `.env` (this is also the default when unset).
+4. On an application's page, click **Sync context** to fetch and embed the job posting, notes, and recruiter context, then ask questions against it.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+On machines with limited memory, `qwen3:4b` is a lighter alternative for `OLLAMA_RAG_RESPONSE_MODEL`.
 
-## Deploy on Vercel
+### Using OpenAI instead (optional, paid)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Set `RAG_PROVIDER="openai"` and uncomment the `OPENAI_*` settings in `.env`. Embeddings from different providers are not compatible, so re-sync each application's context after switching.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Contact research (optional)
+
+Recruiter contact research uses a Tavily-compatible search API. Set `TAVILY_API_KEY` in `.env`; Tavily's free tier is enough for personal use.
