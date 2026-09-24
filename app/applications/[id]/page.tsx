@@ -519,8 +519,9 @@ export default function ApplicationDetailPage() {
 
   return (
     <PageFrame
-      title={`${item.company}`}
-      subtitle="Edit the record, keep follow-up timing tight, and capture notes while the context is fresh."
+      eyebrow={item.role}
+      title={item.company}
+      subtitle={`Applied ${item.dateApplied}. Edits save as you go.`}
       actions={
         <>
           <span className={stageBadgeClass(item.stage)}>{item.stage}</span>
@@ -1249,7 +1250,7 @@ export default function ApplicationDetailPage() {
           />
         </div>
 
-        <div className="list-card space-y-4">
+        <div id="assistant" className="list-card scroll-mt-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="section-title">Application assistant</div>

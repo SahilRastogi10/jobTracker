@@ -78,8 +78,9 @@ export default function StatsPage() {
 
   return (
     <PageFrame
-      title="Stats"
-      subtitle="A quick pulse on your pipeline, follow-up pressure, and reminder load."
+      eyebrow="Stats"
+      title="How the search is going"
+      subtitle="Your pipeline by stage, follow-up health, reminders, and assistant drafts."
       actions={loading ? <div className="badge badge-neutral">Refreshing...</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
@@ -130,9 +131,20 @@ export default function StatsPage() {
               ) : (
                 <ul className="space-y-3">
                   {Object.entries(stats.stageCounts).map(([stage, count]) => (
-                    <li key={stage} className="list-card flex items-center justify-between gap-3">
-                      <span className="badge badge-neutral">{stage}</span>
-                      <span className="text-xl font-semibold">{count}</span>
+                    <li key={stage} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`badge badge-${stage}`}>{stage}</span>
+                        <span className="font-display text-2xl">{count}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[color:var(--paper-sunk)]">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${stats.totalApplications ? (count / stats.totalApplications) * 100 : 0}%`,
+                            background: `var(--stage-${stage}, var(--ink))`,
+                          }}
+                        />
+                      </div>
                     </li>
                   ))}
                 </ul>

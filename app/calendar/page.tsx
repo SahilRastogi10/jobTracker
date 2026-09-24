@@ -232,8 +232,9 @@ export default function CalendarPage() {
 
   return (
     <PageFrame
-      title="Calendar"
-      subtitle="Scan monthly activity, click into a day, and resolve reminders without leaving the schedule view."
+      eyebrow="Calendar"
+      title="The month at a glance"
+      subtitle="Pick a day to see what you applied to, what is due, and who to follow up with."
       actions={countsLoading ? <div className="badge badge-neutral">Loading...</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
@@ -280,23 +281,41 @@ export default function CalendarPage() {
             return (
               <button
                 key={idx}
-                className={`min-h-[110px] rounded-[1.3rem] border p-3 text-left transition ${
+                className={`flex min-h-[96px] flex-col justify-start rounded-[10px] border p-2.5 text-left transition hover:border-[color:var(--ink)] ${
                   isSelected
-                    ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)]"
+                    ? "border-[color:var(--ink)] bg-[color:var(--paper-sunk)]"
                     : "border-[color:var(--line)] bg-[color:var(--paper-strong)]"
                 }`}
                 onClick={() => setSelectedDate(cell.dateStr!)}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-semibold">{cell.dayNum}</div>
-                  {isToday ? <div className="badge badge-offer">today</div> : null}
+                  <div
+                    className={
+                      isToday
+                        ? "grid h-7 w-7 place-items-center rounded-full bg-[color:var(--accent)] font-semibold text-white"
+                        : "font-semibold"
+                    }
+                  >
+                    {cell.dayNum}
+                  </div>
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  <div className="badge badge-neutral">Apps {aCount}</div>
-                  <div className="badge badge-neutral">Rem {rCount}</div>
+                {/* Only days with activity get markers, so busy days stand out */}
+                <div className="mt-2 space-y-1 text-xs font-semibold">
+                  {aCount > 0 ? (
+                    <div className="text-[color:var(--stage-applied)]">
+                      {aCount} applied
+                    </div>
+                  ) : null}
                   {fCount > 0 ? (
-                    <div className="badge badge-interview">Follow-up {fCount}</div>
+                    <div className="text-[color:var(--accent)]">
+                      {fCount} follow-up{fCount === 1 ? "" : "s"}
+                    </div>
+                  ) : null}
+                  {rCount > 0 ? (
+                    <div className="text-[color:var(--stage-interview)]">
+                      {rCount} reminder{rCount === 1 ? "" : "s"}
+                    </div>
                   ) : null}
                 </div>
               </button>

@@ -79,8 +79,9 @@ export default function ApplicationsPage() {
 
   return (
     <PageFrame
-      title="Applications"
-      subtitle="Search by company or role, slice the list by stage, and keep your pipeline readable as it grows."
+      eyebrow="Pipeline"
+      title="Every application"
+      subtitle="Search by company or role and filter by stage."
       actions={
         <>
           {loading ? <div className="badge badge-neutral">Searching...</div> : null}

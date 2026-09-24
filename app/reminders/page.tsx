@@ -174,8 +174,9 @@ export default function RemindersPage() {
 
   return (
     <PageFrame
-      title="Reminders"
-      subtitle="Manage one day at a time, edit details inline, and keep every reminder tied back to the right application."
+      eyebrow="Reminders"
+      title="One day at a time"
+      subtitle="Create, edit, and check off reminders for any day, each tied to the right application."
       actions={loading ? <div className="badge badge-neutral">Loading...</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
