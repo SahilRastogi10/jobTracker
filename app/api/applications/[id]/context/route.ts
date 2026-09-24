@@ -39,24 +39,29 @@ function buildProfileContent(application: {
     .join("\n");
 }
 
-function buildRecruiterContent(application: {
-  recruiterName: string | null;
-  recruiterTitle: string | null;
-  recruiterEmail: string | null;
-  recruiterLinkedIn: string | null;
-  recruiterSource: string | null;
-}) {
-  const lines = compactLines([
-    application.recruiterName ? `Recruiter name: ${application.recruiterName}` : null,
-    application.recruiterTitle ? `Recruiter title: ${application.recruiterTitle}` : null,
-    application.recruiterEmail ? `Recruiter email: ${application.recruiterEmail}` : null,
-    application.recruiterLinkedIn
-      ? `Recruiter profile: ${application.recruiterLinkedIn}`
-      : null,
-    application.recruiterSource ? `Source notes: ${application.recruiterSource}` : null,
-  ]);
+type RecruiterRecord = {
+  name: string | null;
+  title: string | null;
+  email: string | null;
+  linkedIn: string | null;
+  source: string | null;
+};
 
-  return lines.join("\n");
+function buildRecruiterContent(recruiters: RecruiterRecord[]) {
+  return recruiters
+    .map((recruiter, index) => {
+      const lines = compactLines([
+        recruiter.name ? `Recruiter name: ${recruiter.name}` : null,
+        recruiter.title ? `Recruiter title: ${recruiter.title}` : null,
+        recruiter.email ? `Recruiter email: ${recruiter.email}` : null,
+        recruiter.linkedIn ? `Recruiter profile: ${recruiter.linkedIn}` : null,
+        recruiter.source ? `Source notes: ${recruiter.source}` : null,
+      ]);
+
+      return lines.length > 0 ? [`Recruiter ${index + 1}`, ...lines].join("\n") : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function buildDocumentPayloads(application: {
@@ -68,11 +73,7 @@ async function buildDocumentPayloads(application: {
   followUpDate: string | null;
   link: string | null;
   notes: string | null;
-  recruiterName: string | null;
-  recruiterTitle: string | null;
-  recruiterEmail: string | null;
-  recruiterLinkedIn: string | null;
-  recruiterSource: string | null;
+  recruiters: RecruiterRecord[];
 }) {
   const warnings: string[] = [];
   const documents: Array<{
@@ -99,12 +100,15 @@ async function buildDocumentPayloads(application: {
     });
   }
 
-  const recruiterContext = buildRecruiterContent(application);
+  const recruiterContext = buildRecruiterContent(application.recruiters);
   if (recruiterContext) {
     documents.push({
       sourceType: DocumentSourceType.RECRUITER_CONTEXT,
       title: "Recruiter context",
-      url: application.recruiterLinkedIn ?? application.link ?? null,
+      url:
+        application.recruiters.find((recruiter) => recruiter.linkedIn)?.linkedIn ??
+        application.link ??
+        null,
       content: recruiterContext,
     });
   }
@@ -230,11 +234,10 @@ export async function POST(req: Request) {
       followUpDate: true,
       link: true,
       notes: true,
-      recruiterName: true,
-      recruiterTitle: true,
-      recruiterEmail: true,
-      recruiterLinkedIn: true,
-      recruiterSource: true,
+      recruiters: {
+        select: { name: true, title: true, email: true, linkedIn: true, source: true },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
 

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { formatRecruiterSummary } from "@/lib/recruiters";
 
 function esc(v: any) {
   const s = String(v ?? "");
@@ -15,6 +16,12 @@ function esc(v: any) {
 export async function GET() {
   const items = await prisma.application.findMany({
     orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }],
+    include: {
+      recruiters: {
+        select: { name: true, email: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
 
   const header = [
@@ -25,6 +32,7 @@ export async function GET() {
     "dateApplied",
     "followUpDate",
     "link",
+    "recruiters",
     "notes",
     "createdAt",
     "updatedAt",
@@ -38,6 +46,7 @@ export async function GET() {
     a.dateApplied,
     a.followUpDate ?? "",
     a.link ?? "",
+    a.recruiters.map(formatRecruiterSummary).filter(Boolean).join("; "),
     a.notes ?? "",
     a.createdAt.toISOString(),
     a.updatedAt.toISOString(),

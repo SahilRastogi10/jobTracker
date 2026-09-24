@@ -14,12 +14,18 @@ type Application = {
   dateApplied: string;
   notes?: string | null;
   followUpDate?: string | null;
-  recruiterName?: string | null;
-  recruiterTitle?: string | null;
-  recruiterEmail?: string | null;
-  recruiterLinkedIn?: string | null;
-  recruiterSource?: string | null;
 };
+
+type Recruiter = {
+  id: string;
+  name?: string | null;
+  title?: string | null;
+  email?: string | null;
+  linkedIn?: string | null;
+  source?: string | null;
+};
+
+type RecruiterPatch = Partial<Omit<Recruiter, "id">>;
 
 type ContactResearchResult = {
   title?: string;
@@ -153,6 +159,8 @@ export default function ApplicationDetailPage() {
   const id = params?.id;
 
   const [item, setItem] = useState<Application | null>(null);
+  const [recruiters, setRecruiters] = useState<Recruiter[]>([]);
+  const [saveTarget, setSaveTarget] = useState<string>("new");
   const [saving, setSaving] = useState(false);
   const [creatingFU, setCreatingFU] = useState(false);
   const [researchLoading, setResearchLoading] = useState(false);
@@ -179,6 +187,13 @@ export default function ApplicationDetailPage() {
     }
     const data = await res.json();
     setItem(data.item ?? null);
+  }
+
+  async function loadRecruiters(appId: string) {
+    const res = await fetch(`/api/applications/${appId}/recruiters`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setRecruiters(Array.isArray(data.items) ? data.items : []);
   }
 
   async function loadContextStatus(appId: string) {
@@ -213,6 +228,7 @@ export default function ApplicationDetailPage() {
   useEffect(() => {
     if (!id) return;
     void load(id);
+    void loadRecruiters(id);
     void loadContextStatus(id);
   }, [id]);
 
@@ -319,11 +335,60 @@ export default function ApplicationDetailPage() {
     }
   }
 
-  function applyContactFields(patch: Partial<Application>) {
-    if (!item) return;
-    const next = { ...item, ...patch };
-    setItem(next);
-    void save(patch);
+  async function createRecruiter(patch: RecruiterPatch = {}) {
+    if (!item) return null;
+    const res = await fetch(`/api/applications/${item.id}/recruiters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const created = data.item as Recruiter;
+    setRecruiters((current) => [...current, created]);
+    return created;
+  }
+
+  function editRecruiterLocal(recruiterId: string, patch: RecruiterPatch) {
+    setRecruiters((current) =>
+      current.map((recruiter) =>
+        recruiter.id === recruiterId ? { ...recruiter, ...patch } : recruiter
+      )
+    );
+  }
+
+  async function saveRecruiter(recruiterId: string, patch: RecruiterPatch) {
+    setSaving(true);
+    const res = await fetch(`/api/recruiters/${recruiterId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    setSaving(false);
+    if (res.ok) {
+      const data = await res.json();
+      editRecruiterLocal(recruiterId, data.item);
+    }
+  }
+
+  async function deleteRecruiter(recruiterId: string) {
+    if (!confirm("Delete this recruiter?")) return;
+    const res = await fetch(`/api/recruiters/${recruiterId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setRecruiters((current) => current.filter((recruiter) => recruiter.id !== recruiterId));
+    if (saveTarget === recruiterId) setSaveTarget("new");
+  }
+
+  // Research results go to the selected recruiter; "new" creates one and targets it for later saves.
+  async function applyContactFields(patch: RecruiterPatch) {
+    if (saveTarget === "new" || !recruiters.some((r) => r.id === saveTarget)) {
+      const created = await createRecruiter(patch);
+      if (created) setSaveTarget(created.id);
+      return;
+    }
+
+    editRecruiterLocal(saveTarget, patch);
+    await saveRecruiter(saveTarget, patch);
   }
 
   async function syncApplicationContext() {
@@ -666,38 +731,28 @@ export default function ApplicationDetailPage() {
           <div className="list-card space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="section-title">Saved contact details</div>
+                <div className="section-title">Save research to</div>
                 <p className="section-subtitle">
-                  Keep the best contact you found here so you can reuse it later for follow-ups and outreach.
+                  Emails, profiles, and sources you save from the results below go to this recruiter.
                 </p>
               </div>
-              {item.recruiterEmail || item.recruiterLinkedIn || item.recruiterSource ? (
-                <div className="badge badge-neutral">Saved</div>
-              ) : (
-                <div className="badge badge-neutral">Nothing saved yet</div>
-              )}
+              <div className="badge badge-neutral">
+                {recruiters.length} {recruiters.length === 1 ? "recruiter" : "recruiters"}
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="mini-stat">
-                <div className="mini-stat-label">Email</div>
-                <div className="mini-stat-value text-base">
-                  {item.recruiterEmail || "Not saved"}
-                </div>
-              </div>
-              <div className="mini-stat">
-                <div className="mini-stat-label">Profile</div>
-                <div className="mini-stat-value text-base">
-                  {item.recruiterLinkedIn ? formatSourceLabel(item.recruiterLinkedIn, "Saved link") : "Not saved"}
-                </div>
-              </div>
-              <div className="mini-stat">
-                <div className="mini-stat-label">Source</div>
-                <div className="mini-stat-value text-base">
-                  {item.recruiterSource ? formatSourceLabel(item.recruiterSource, "Saved source") : "Not saved"}
-                </div>
-              </div>
-            </div>
+            <select
+              className="field-select"
+              value={saveTarget}
+              onChange={(e) => setSaveTarget(e.target.value)}
+            >
+              <option value="new">New recruiter</option>
+              {recruiters.map((recruiter, index) => (
+                <option key={recruiter.id} value={recruiter.id}>
+                  {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                </option>
+              ))}
+            </select>
           </div>
 
           {researchResults ? (
@@ -740,8 +795,8 @@ export default function ApplicationDetailPage() {
                               className="app-button"
                               onClick={() =>
                                 applyContactFields({
-                                  recruiterEmail: mention.email,
-                                  recruiterSource: mention.sourceUrl,
+                                  email: mention.email,
+                                  source: mention.sourceUrl,
                                 })
                               }
                             >
@@ -807,8 +862,8 @@ export default function ApplicationDetailPage() {
                               className="app-button-secondary"
                               onClick={() =>
                                 applyContactFields({
-                                  recruiterEmail: mention.email,
-                                  recruiterSource: mention.sourceUrl,
+                                  email: mention.email,
+                                  source: mention.sourceUrl,
                                 })
                               }
                             >
@@ -870,8 +925,8 @@ export default function ApplicationDetailPage() {
                               className="app-button-secondary"
                               onClick={() =>
                                 applyContactFields({
-                                  recruiterLinkedIn: result.url ?? "",
-                                  recruiterSource: result.url ?? "",
+                                  linkedIn: result.url ?? "",
+                                  source: result.url ?? "",
                                 })
                               }
                             >
@@ -920,7 +975,7 @@ export default function ApplicationDetailPage() {
                               className="app-button-secondary"
                               onClick={() =>
                                 applyContactFields({
-                                  recruiterSource: result.url ?? "",
+                                  source: result.url ?? "",
                                 })
                               }
                             >
@@ -936,89 +991,113 @@ export default function ApplicationDetailPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="field-label" htmlFor="recruiter-name">
-                Recruiter name
-              </label>
-              <input
-                id="recruiter-name"
-                className="field-input"
-                value={item.recruiterName ?? ""}
-                onChange={(e) =>
-                  setItem({ ...item, recruiterName: e.target.value })
-                }
-                onBlur={() => save({ recruiterName: item.recruiterName ?? "" })}
-                placeholder="Jordan Lee"
-              />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="section-title">Recruiters</div>
+                <p className="section-subtitle">
+                  Keep every contact you find for this application so you can reuse them for follow-ups and outreach.
+                </p>
+              </div>
+              <button className="app-button-secondary" onClick={() => void createRecruiter()}>
+                Add recruiter
+              </button>
             </div>
 
-            <div>
-              <label className="field-label" htmlFor="recruiter-title">
-                Recruiter title
-              </label>
-              <input
-                id="recruiter-title"
-                className="field-input"
-                value={item.recruiterTitle ?? ""}
-                onChange={(e) =>
-                  setItem({ ...item, recruiterTitle: e.target.value })
-                }
-                onBlur={() => save({ recruiterTitle: item.recruiterTitle ?? "" })}
-                placeholder="Senior Technical Recruiter"
-              />
-            </div>
+            {recruiters.length === 0 ? (
+              <div className="empty-state">
+                No recruiters saved yet. Add one manually or save a result from contact research.
+              </div>
+            ) : (
+              recruiters.map((recruiter, index) => (
+                <div key={recruiter.id} className="panel-card space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="section-title">
+                      {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                    </div>
+                    <button
+                      className="app-button-ghost"
+                      onClick={() => void deleteRecruiter(recruiter.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
 
-            <div>
-              <label className="field-label" htmlFor="recruiter-email">
-                Recruiter email
-              </label>
-              <input
-                id="recruiter-email"
-                className="field-input"
-                type="email"
-                value={item.recruiterEmail ?? ""}
-                onChange={(e) =>
-                  setItem({ ...item, recruiterEmail: e.target.value })
-                }
-                onBlur={() => save({ recruiterEmail: item.recruiterEmail ?? "" })}
-                placeholder="name@company.com"
-              />
-            </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="field-label" htmlFor={`recruiter-name-${recruiter.id}`}>
+                        Name
+                      </label>
+                      <input
+                        id={`recruiter-name-${recruiter.id}`}
+                        className="field-input"
+                        value={recruiter.name ?? ""}
+                        onChange={(e) => editRecruiterLocal(recruiter.id, { name: e.target.value })}
+                        onBlur={() => saveRecruiter(recruiter.id, { name: recruiter.name ?? "" })}
+                        placeholder="Jordan Lee"
+                      />
+                    </div>
 
-            <div>
-              <label className="field-label" htmlFor="recruiter-linkedin">
-                LinkedIn or public profile
-              </label>
-              <input
-                id="recruiter-linkedin"
-                className="field-input"
-                value={item.recruiterLinkedIn ?? ""}
-                onChange={(e) =>
-                  setItem({ ...item, recruiterLinkedIn: e.target.value })
-                }
-                onBlur={() =>
-                  save({ recruiterLinkedIn: item.recruiterLinkedIn ?? "" })
-                }
-                placeholder="https://linkedin.com/in/..."
-              />
-            </div>
-          </div>
+                    <div>
+                      <label className="field-label" htmlFor={`recruiter-title-${recruiter.id}`}>
+                        Title
+                      </label>
+                      <input
+                        id={`recruiter-title-${recruiter.id}`}
+                        className="field-input"
+                        value={recruiter.title ?? ""}
+                        onChange={(e) => editRecruiterLocal(recruiter.id, { title: e.target.value })}
+                        onBlur={() => saveRecruiter(recruiter.id, { title: recruiter.title ?? "" })}
+                        placeholder="Senior Technical Recruiter"
+                      />
+                    </div>
 
-          <div>
-            <label className="field-label" htmlFor="recruiter-source">
-              Source notes
-            </label>
-            <textarea
-              id="recruiter-source"
-              className="field-textarea"
-              value={item.recruiterSource ?? ""}
-              onChange={(e) =>
-                setItem({ ...item, recruiterSource: e.target.value })
-              }
-              onBlur={() => save({ recruiterSource: item.recruiterSource ?? "" })}
-              placeholder="Where you found the contact info, team page, recruiter profile, careers page, etc."
-            />
+                    <div>
+                      <label className="field-label" htmlFor={`recruiter-email-${recruiter.id}`}>
+                        Email
+                      </label>
+                      <input
+                        id={`recruiter-email-${recruiter.id}`}
+                        className="field-input"
+                        type="email"
+                        value={recruiter.email ?? ""}
+                        onChange={(e) => editRecruiterLocal(recruiter.id, { email: e.target.value })}
+                        onBlur={() => saveRecruiter(recruiter.id, { email: recruiter.email ?? "" })}
+                        placeholder="name@company.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="field-label" htmlFor={`recruiter-linkedin-${recruiter.id}`}>
+                        LinkedIn or public profile
+                      </label>
+                      <input
+                        id={`recruiter-linkedin-${recruiter.id}`}
+                        className="field-input"
+                        value={recruiter.linkedIn ?? ""}
+                        onChange={(e) => editRecruiterLocal(recruiter.id, { linkedIn: e.target.value })}
+                        onBlur={() => saveRecruiter(recruiter.id, { linkedIn: recruiter.linkedIn ?? "" })}
+                        placeholder="https://linkedin.com/in/..."
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor={`recruiter-source-${recruiter.id}`}>
+                      Source notes
+                    </label>
+                    <textarea
+                      id={`recruiter-source-${recruiter.id}`}
+                      className="field-textarea"
+                      value={recruiter.source ?? ""}
+                      onChange={(e) => editRecruiterLocal(recruiter.id, { source: e.target.value })}
+                      onBlur={() => saveRecruiter(recruiter.id, { source: recruiter.source ?? "" })}
+                      placeholder="Where you found the contact info, team page, recruiter profile, careers page, etc."
+                    />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

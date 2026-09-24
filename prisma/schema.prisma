@@ -26,15 +26,28 @@ model Application {
   dateApplied  String   // YYYY-MM-DD local date
   notes        String?
   followUpDate String?  // YYYY-MM-DD local date
-  recruiterName     String?
-  recruiterTitle    String?
-  recruiterEmail    String?
-  recruiterLinkedIn String?
-  recruiterSource   String?
 
   reminders    Reminder[]
+  recruiters   Recruiter[]
   documents    ApplicationDocument[]
   chunks       DocumentChunk[]
+}
+
+model Recruiter {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  applicationId String
+
+  name          String?
+  title         String?
+  email         String?
+  linkedIn      String?
+  source        String?
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
 }
 
 model DailyGoal {
