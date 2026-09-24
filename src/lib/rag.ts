@@ -35,7 +35,7 @@ type OpenAIEmbeddingsResult = {
   };
 };
 
-function getRagProvider(): RagProvider {
+export function getRagProvider(): RagProvider {
   return process.env.RAG_PROVIDER?.toLowerCase() === "openai" ? "openai" : "ollama";
 }
 
@@ -64,7 +64,7 @@ function getEmbeddingModel() {
     : process.env.OPENAI_RAG_EMBEDDING_MODEL ?? DEFAULT_OPENAI_EMBEDDING_MODEL;
 }
 
-function getResponseModel() {
+export function getResponseModel() {
   return getRagProvider() === "ollama"
     ? process.env.OLLAMA_RAG_RESPONSE_MODEL ?? DEFAULT_OLLAMA_RESPONSE_MODEL
     : process.env.OPENAI_RAG_RESPONSE_MODEL ?? DEFAULT_OPENAI_RESPONSE_MODEL;
@@ -196,25 +196,23 @@ function extractOutputText(result: OpenAIResponsesResult) {
   return combined;
 }
 
-export async function answerWithRetrievedContext(
-  question: string,
-  contextBlocks: Array<{
-    label: string;
-    text: string;
-  }>
-) {
-  const context = contextBlocks
-    .map(
-      (block, index) =>
-        `[${index + 1}] ${block.label}\n${block.text}`
-    )
+// Reasoning models served through Ollama can leak their thinking into the text.
+function stripThinking(value: string) {
+  return value.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+
+type ContextBlock = {
+  label: string;
+  text: string;
+};
+
+function formatContextBlocks(contextBlocks: ContextBlock[]) {
+  return contextBlocks
+    .map((block, index) => `[${index + 1}] ${block.label}\n${block.text}`)
     .join("\n\n");
+}
 
-  const systemPrompt =
-    "You answer questions about a saved job application using only the supplied context. Be precise, keep claims grounded in the sources, and say when the context is incomplete. When you use a source, cite it inline like [1] or [2].";
-
-  const userPrompt = `Question: ${question}\n\nContext:\n${context}`;
-
+export async function generateText(systemPrompt: string, userPrompt: string) {
   const body: Record<string, unknown> = {
     model: getResponseModel(),
     instructions: systemPrompt,
@@ -229,10 +227,57 @@ export async function answerWithRetrievedContext(
 
   const data = await ragRequest<OpenAIResponsesResult>("/responses", body);
 
-  const answer = extractOutputText(data);
-  if (!answer) {
+  const text = stripThinking(extractOutputText(data));
+  if (!text) {
     throw new Error("The model did not return a text answer.");
   }
 
-  return answer;
+  return text;
+}
+
+export async function answerWithRetrievedContext(
+  question: string,
+  contextBlocks: ContextBlock[]
+) {
+  const systemPrompt =
+    "You answer questions about a saved job application using only the supplied context. Be precise, keep claims grounded in the sources, and say when the context is incomplete. When you use a source, cite it inline like [1] or [2].";
+
+  return generateText(
+    systemPrompt,
+    `Question: ${question}\n\nContext:\n${formatContextBlocks(contextBlocks)}`
+  );
+}
+
+export async function draftFollowUpMessage(
+  details: string,
+  channel: string,
+  contextBlocks: ContextBlock[]
+) {
+  // Describe only the requested format; listing both makes small models write both.
+  const format =
+    channel === "linkedin"
+      ? "Write a single LinkedIn message body under 80 words, with no subject line."
+      : "Write a single email: a line 'Subject: ...', a blank line, then the body, under 150 words.";
+
+  const systemPrompt = [
+    "You draft a short follow-up message from a job applicant to a recruiter or hiring team.",
+    "Use only facts from the application details and context. Never invent names, dates, interviews, or accomplishments; if something is unknown, leave it out.",
+    "Keep it warm and specific to the role.",
+    format,
+    "Greet the recipient by first name if one is given; otherwise open with 'Hello,'.",
+    "Sign off with the applicant's name if it is given; otherwise end with 'Best,' and no name.",
+    "Do not include citation markers, bracketed placeholders, alternative versions, or commentary about the draft.",
+  ].join(" ");
+
+  const text = await generateText(
+    systemPrompt,
+    `Application details:\n${details}\n\nContext:\n${formatContextBlocks(contextBlocks)}`
+  );
+
+  // Small local models still emit "[Your Name]" lines and notes about them; drop those lines.
+  return text
+    .split("\n")
+    .filter((line) => !/^\s*\[[^\]]*\]\s*$/.test(line) && !/^\s*\*?\(Note:/i.test(line))
+    .join("\n")
+    .trim();
 }

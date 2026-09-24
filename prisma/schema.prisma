@@ -29,6 +29,7 @@ model Application {
   reminders    Reminder[]
   recruiters   Recruiter[]
   followUps    FollowUp[]
+  drafts       GeneratedDraft[]
   documents    ApplicationDocument[]
   chunks       DocumentChunk[]
 }
@@ -47,6 +48,7 @@ model Recruiter {
 
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   followUps     FollowUp[]
+  drafts        GeneratedDraft[]
 
   @@index([applicationId])
 }
@@ -63,13 +65,41 @@ model FollowUp {
   status        String    @default("planned") // planned, sent, skipped
   sentAt        DateTime?
   notes         String?
+  draftId       String?   // approved AI draft attached as this follow-up's message
 
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  recruiter     Recruiter?  @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  application   Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  recruiter     Recruiter?      @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  draft         GeneratedDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
   reminders     Reminder[]
 
   @@index([applicationId])
   @@index([status, dueDate])
+}
+
+// LLM output held for human review. Nothing generated is used until it is approved.
+model GeneratedDraft {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  applicationId String
+  recruiterId   String?
+
+  kind          String    // follow_up_email, qa_answer
+  prompt        String
+  content       String    // what the model wrote
+  editedContent String?   // reviewer's edits, used instead of content when present
+  citations     String    // JSON array of retrieved sources
+  provider      String
+  model         String
+  status        String    @default("pending_review") // pending_review, approved, rejected
+  reviewedAt    DateTime?
+  appliedAt     DateTime?
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  recruiter     Recruiter?  @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  followUps     FollowUp[]
+
+  @@index([applicationId, createdAt])
 }
 
 model DailyGoal {

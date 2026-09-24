@@ -23,13 +23,27 @@ export async function PATCH(req: Request) {
 
   const existing = await prisma.followUp.findUnique({
     where: { id },
-    select: { id: true, applicationId: true, dueDate: true },
+    select: {
+      id: true,
+      applicationId: true,
+      dueDate: true,
+      draft: { select: { status: true } },
+    },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const parsed = await followUpFieldsFromBody(body, existing.applicationId);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  // Approval gate: an attached AI draft must be approved before the follow-up counts as sent.
+  const keepsDraft = parsed.data.draftId !== null && existing.draft;
+  if (parsed.data.status === "sent" && keepsDraft && existing.draft?.status !== "approved") {
+    return NextResponse.json(
+      { error: "The attached draft must be approved before this follow-up can be marked sent." },
+      { status: 409 }
+    );
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     // Keep linked reminders on the follow-up's date when it moves.

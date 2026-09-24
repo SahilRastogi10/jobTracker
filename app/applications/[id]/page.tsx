@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ApplicationAssistant } from "@/components/ApplicationAssistant";
 import { PageFrame } from "@/components/PageFrame";
 
 type Application = {
@@ -34,6 +35,7 @@ type FollowUp = {
   sentAt?: string | null;
   notes?: string | null;
   recruiterId?: string | null;
+  draft?: { id: string; status: string } | null;
   hasReminder: boolean;
 };
 
@@ -93,24 +95,6 @@ type ContextStatusResponse = {
   status: ContextStatus;
   warnings?: string[];
 };
-
-type ApplicationAskResponse = {
-  answer: string;
-  matches: Array<{
-    id: string;
-    score: number;
-    content: string;
-    sourceType: string;
-    title: string;
-    url?: string | null;
-  }>;
-};
-
-const QUICK_RAG_PROMPTS = [
-  "Summarize this role and the biggest priorities.",
-  "Draft a short recruiter follow-up email for this application.",
-  "What skills or experience should I emphasize if I hear back?",
-] as const;
 
 function addDays(ymd: string, days: number): string {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -190,12 +174,6 @@ export default function ApplicationDetailPage() {
   const [contextSyncing, setContextSyncing] = useState(false);
   const [contextWarnings, setContextWarnings] = useState<string[]>([]);
   const [contextError, setContextError] = useState<string | null>(null);
-  const [askQuestion, setAskQuestion] = useState<string>(
-    QUICK_RAG_PROMPTS[0]
-  );
-  const [askLoading, setAskLoading] = useState(false);
-  const [askError, setAskError] = useState<string | null>(null);
-  const [askResult, setAskResult] = useState<ApplicationAskResponse | null>(null);
 
   async function load(appId: string) {
     const res = await fetch(`/api/applications/${appId}`);
@@ -329,6 +307,18 @@ export default function ApplicationDetailPage() {
     setFollowUps((current) => current.filter((followUp) => followUp.id !== followUpId));
   }
 
+  async function detachDraft(followUpId: string) {
+    const res = await fetch(`/api/followups/${followUpId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId: null }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      editFollowUpLocal(followUpId, data.item);
+    }
+  }
+
   async function createFollowUpReminder(followUp: FollowUp) {
     if (!item) return;
     setFollowUpBusyId(followUp.id);
@@ -449,7 +439,6 @@ export default function ApplicationDetailPage() {
 
     setContextSyncing(true);
     setContextError(null);
-    setAskError(null);
 
     try {
       const res = await fetch(`/api/applications/${item.id}/context`, {
@@ -477,46 +466,6 @@ export default function ApplicationDetailPage() {
       );
     } finally {
       setContextSyncing(false);
-    }
-  }
-
-  async function askApplicationContext() {
-    if (!item) return;
-
-    const question = askQuestion.trim();
-    if (!question) {
-      setAskError("Ask a question first.");
-      return;
-    }
-
-    setAskLoading(true);
-    setAskError(null);
-
-    try {
-      const res = await fetch(`/api/applications/${item.id}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const data = (await res.json()) as ApplicationAskResponse & {
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(
-          typeof data?.error === "string"
-            ? data.error
-            : "Could not answer the question."
-        );
-      }
-
-      setAskResult(data);
-    } catch (error) {
-      setAskError(
-        error instanceof Error ? error.message : "Could not answer the question."
-      );
-    } finally {
-      setAskLoading(false);
     }
   }
 
@@ -775,6 +724,27 @@ export default function ApplicationDetailPage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
+                    {followUp.draft ? (
+                      <>
+                        <span
+                          className={
+                            followUp.draft.status === "approved"
+                              ? "badge badge-offer"
+                              : "badge badge-applied"
+                          }
+                        >
+                          {followUp.draft.status === "approved"
+                            ? "Approved draft attached"
+                            : "Attached draft needs review"}
+                        </span>
+                        <button
+                          className="app-button-ghost"
+                          onClick={() => void detachDraft(followUp.id)}
+                        >
+                          Detach draft
+                        </button>
+                      </>
+                    ) : null}
                     {followUp.status === "sent" && followUp.sentAt ? (
                       <span className="badge badge-offer">
                         Sent {new Date(followUp.sentAt).toLocaleDateString()}
@@ -1284,7 +1254,7 @@ export default function ApplicationDetailPage() {
             <div>
               <div className="section-title">Application assistant</div>
               <p className="section-subtitle">
-                Sync the role link, notes, and recruiter details into retrievable context, then ask grounded questions about this application.
+                Sync the role link, notes, and recruiter details into retrievable context. Drafted follow-ups and answers are grounded in those sources and held for your review.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1359,85 +1329,14 @@ export default function ApplicationDetailPage() {
             </div>
           )}
 
-          <div className="panel-card space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {QUICK_RAG_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  className="app-button-secondary"
-                  onClick={() => setAskQuestion(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-
-            <div>
-              <label className="field-label" htmlFor="ask-application">
-                Ask a question
-              </label>
-              <textarea
-                id="ask-application"
-                className="field-textarea"
-                value={askQuestion}
-                onChange={(e) => setAskQuestion(e.target.value)}
-                placeholder="What should I emphasize for this role?"
-              />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                className="app-button"
-                onClick={askApplicationContext}
-                disabled={askLoading}
-              >
-                {askLoading ? "Thinking..." : "Ask assistant"}
-              </button>
-            </div>
-
-            {askError ? <div className="error-banner">{askError}</div> : null}
-
-            {askResult ? (
-              <div className="space-y-4">
-                <div className="result-card-compact space-y-3">
-                  <div className="section-title">Answer</div>
-                  <div className="whitespace-pre-wrap">{askResult.answer}</div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="section-title">Retrieved sources</div>
-                  <div className="scroll-panel space-y-3">
-                    {askResult.matches.map((match) => (
-                      <div key={match.id} className="result-card-compact">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{match.title}</div>
-                            <div className="section-subtitle">
-                              {formatSourceType(match.sourceType)}
-                            </div>
-                          </div>
-                          <div className="badge badge-neutral">
-                            score {match.score}
-                          </div>
-                        </div>
-                        <div className="result-snippet">{match.content}</div>
-                        {match.url ? (
-                          <a
-                            className="subtle-link"
-                            href={match.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {formatSourceLabel(match.url, "Open source")}
-                          </a>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <ApplicationAssistant
+            applicationId={item.id}
+            hasContext={(contextStatus?.chunkCount ?? 0) > 0}
+            recruiters={recruiters}
+            followUps={followUps}
+            onFollowUpsChanged={() => void loadFollowUps(item.id)}
+            onApplicationChanged={() => void load(item.id)}
+          />
         </div>
 
         <div className="soft-divider" />

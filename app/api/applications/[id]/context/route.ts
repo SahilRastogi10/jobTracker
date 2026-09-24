@@ -59,8 +59,11 @@ type RecruiterRecord = {
   source: string | null;
 };
 
-function buildRecruiterContent(recruiters: RecruiterRecord[]) {
-  return recruiters
+function buildRecruiterContent(
+  application: { company: string; role: string },
+  recruiters: RecruiterRecord[]
+) {
+  const blocks = recruiters
     .map((recruiter, index) => {
       const lines = compactLines([
         recruiter.name ? `Recruiter name: ${recruiter.name}` : null,
@@ -72,8 +75,15 @@ function buildRecruiterContent(recruiters: RecruiterRecord[]) {
 
       return lines.length > 0 ? [`Recruiter ${index + 1}`, ...lines].join("\n") : "";
     })
-    .filter(Boolean)
-    .join("\n\n");
+    .filter(Boolean);
+
+  if (blocks.length === 0) return "";
+
+  // Name the application so retrieved recruiter chunks are clearly tied to it.
+  return [
+    `Recruiters for the ${application.company} | ${application.role} application`,
+    ...blocks,
+  ].join("\n\n");
 }
 
 async function buildDocumentPayloads(application: {
@@ -112,7 +122,7 @@ async function buildDocumentPayloads(application: {
     });
   }
 
-  const recruiterContext = buildRecruiterContent(application.recruiters);
+  const recruiterContext = buildRecruiterContent(application, application.recruiters);
   if (recruiterContext) {
     documents.push({
       sourceType: DocumentSourceType.RECRUITER_CONTEXT,

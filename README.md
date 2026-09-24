@@ -30,6 +30,16 @@ The RAG features run on [Ollama](https://ollama.com) by default, so no paid API 
 
 On machines with limited memory, `qwen3:4b` is a lighter alternative for `OLLAMA_RAG_RESPONSE_MODEL`.
 
+### Review before use
+
+The assistant drafts follow-up messages and answers questions about an application, grounded in the synced context. Every output lands in a review queue as `pending_review`, along with the sources it was retrieved from and the provider and model that wrote it.
+
+- Edit, approve, or reject each draft. Editing an approved draft sends it back to review.
+- Copying, opening in email, attaching to a follow-up, and appending to notes all go through `POST /api/drafts/[id]/apply`, which refuses drafts that are not approved.
+- A follow-up with an attached draft cannot be marked sent until that draft is approved.
+
+Set `APPLICANT_NAME` in `.env` so drafted messages are signed with your name.
+
 ### Using OpenAI instead (optional, paid)
 
 Set `RAG_PROVIDER="openai"` and uncomment the `OPENAI_*` settings in `.env`. Embeddings from different providers are not compatible, so re-sync each application's context after switching.

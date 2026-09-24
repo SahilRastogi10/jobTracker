@@ -16,6 +16,7 @@ type ParsedFollowUp =
         sentAt?: Date | null;
         notes?: string | null;
         recruiterId?: string | null;
+        draftId?: null;
       };
     };
 
@@ -66,12 +67,16 @@ export async function followUpFieldsFromBody(
     data.recruiterId = recruiterId;
   }
 
+  // Drafts are attached only through /api/drafts/[id]/apply; PATCH can only detach one.
+  if (body.draftId === null) data.draftId = null;
+
   return { data };
 }
 
 export const followUpListInclude = {
   application: { select: { id: true, company: true, role: true, stage: true } },
   recruiter: { select: { id: true, name: true, email: true } },
+  draft: { select: { id: true, status: true } },
   _count: { select: { reminders: true } },
 } satisfies Prisma.FollowUpInclude;
 

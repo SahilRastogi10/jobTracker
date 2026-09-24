@@ -16,6 +16,7 @@ export async function GET() {
     overdueFollowUps,
     upcomingFollowUps,
     sentFollowUps,
+    draftGroups,
   ] = await Promise.all([
     prisma.application.count(),
     prisma.application.groupBy({
@@ -27,6 +28,10 @@ export async function GET() {
     prisma.followUp.count({ where: { status: "planned", dueDate: { lt: today } } }),
     prisma.followUp.count({ where: { status: "planned", dueDate: { gte: today } } }),
     prisma.followUp.count({ where: { status: "sent" } }),
+    prisma.generatedDraft.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
   ]);
 
   const stageCounts = Object.fromEntries(
@@ -46,5 +51,8 @@ export async function GET() {
       upcoming: upcomingFollowUps,
       sent: sentFollowUps,
     },
+    drafts: Object.fromEntries(
+      draftGroups.map((group) => [group.status, group._count._all])
+    ),
   });
 }
