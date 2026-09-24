@@ -15,6 +15,7 @@ type StatsResponse = {
     upcoming: number;
     sent: number;
   };
+  drafts: Partial<Record<"pending_review" | "approved" | "rejected", number>>;
 };
 
 async function readJson(res: Response) {
@@ -67,6 +68,13 @@ export default function StatsPage() {
     setError(null);
     void loadStats();
   }, []);
+
+  const draftTotal = stats
+    ? Object.values(stats.drafts ?? {}).reduce((sum, count) => sum + (count ?? 0), 0)
+    : 0;
+  const reviewedTotal = stats
+    ? (stats.drafts?.approved ?? 0) + (stats.drafts?.rejected ?? 0)
+    : 0;
 
   return (
     <PageFrame
@@ -154,6 +162,41 @@ export default function StatsPage() {
                 <div className="mini-stat-value">{stats.followUps.sent}</div>
               </div>
             </div>
+          </section>
+
+          <section className="panel-card space-y-4">
+            <div>
+              <h2 className="section-title">Assistant drafts</h2>
+              <p className="section-subtitle">
+                Generated follow-ups and answers, and how many passed your review.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="list-card">
+                <div className="mini-stat-label">Generated</div>
+                <div className="mini-stat-value">{draftTotal}</div>
+              </div>
+              <div className="list-card">
+                <div className="mini-stat-label">Awaiting review</div>
+                <div className="mini-stat-value">{stats.drafts.pending_review ?? 0}</div>
+              </div>
+              <div className="list-card">
+                <div className="mini-stat-label">Approved</div>
+                <div className="mini-stat-value">{stats.drafts.approved ?? 0}</div>
+              </div>
+              <div className="list-card">
+                <div className="mini-stat-label">Rejected</div>
+                <div className="mini-stat-value">{stats.drafts.rejected ?? 0}</div>
+              </div>
+            </div>
+
+            {reviewedTotal > 0 ? (
+              <div className="section-subtitle">
+                {Math.round(((stats.drafts.approved ?? 0) / reviewedTotal) * 100)}% of reviewed
+                drafts were approved.
+              </div>
+            ) : null}
           </section>
         </>
       ) : (
