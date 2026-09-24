@@ -942,3 +942,89 @@ textarea {
     box-shadow: 0 0 0 0 transparent;
   }
 }
+
+/* ---------- Resume match ---------- */
+
+.resume-option {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.resume-option:hover {
+  border-color: var(--line-strong);
+}
+
+.resume-option[data-selected="true"] {
+  border-color: var(--ink);
+  background: var(--paper-strong);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.resume-option:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.file-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.file-input::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.4rem 0.8rem;
+  border: 0;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kw-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.kw-missing {
+  border-color: rgba(194, 65, 12, 0.25);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Required gaps matter most, so they get the strongest treatment */
+.kw-missing[data-importance="required"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.kw-missing[data-importance="preferred"] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.kw-matched {
+  background: var(--stage-offer-soft);
+  color: var(--stage-offer);
+}
+
+.score-ring-progress {
+  transition: stroke-dashoffset 0.8s ease-out;
+}

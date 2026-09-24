@@ -42,6 +42,17 @@ const items: Array<{ href: string; label: MessageKey; icon: React.ReactNode }> =
     ),
   },
   {
+    href: "/match",
+    label: "nav.match",
+    icon: (
+      <svg {...iconProps}>
+        <circle cx="12" cy="12" r="8.5" />
+        <circle cx="12" cy="12" r="4.5" />
+        <circle cx="12" cy="12" r="0.8" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
     href: "/reminders",
     label: "nav.reminders",
     icon: (

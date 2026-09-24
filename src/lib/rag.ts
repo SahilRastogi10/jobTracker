@@ -211,6 +211,44 @@ export async function generateText(systemPrompt: string, userPrompt: string) {
   return text;
 }
 
+// Short extraction tasks go through Ollama's native chat API, which can turn off the
+// model's step-by-step reasoning. On a CPU that cuts a few minutes down to seconds.
+export async function generateQuickText(
+  systemPrompt: string,
+  userPrompt: string,
+  signal?: AbortSignal
+) {
+  const nativeBaseUrl = getApiBaseUrl().replace(/\/v1\/?$/, "");
+  const apiKey = getApiKey();
+
+  const res = await fetch(`${nativeBaseUrl}/api/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: getResponseModel(),
+      stream: false,
+      think: false,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }),
+    cache: "no-store",
+    signal,
+  });
+
+  const data = (await res.json().catch(() => ({}))) as {
+    message?: { content?: string };
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || `Ollama request failed with status ${res.status}.`);
+
+  return stripThinking(data.message?.content ?? "");
+}
+
 export async function answerWithRetrievedContext(
   question: string,
   contextBlocks: ContextBlock[],

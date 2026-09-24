@@ -568,6 +568,14 @@ export default function ApplicationDetailPage() {
               onBlur={() => save({ link: item.link ?? "" })}
               placeholder="https://..."
             />
+            {item.link ? (
+              <Link
+                className="subtle-link mt-2 inline-block text-sm"
+                href={`/match?url=${encodeURIComponent(item.link)}`}
+              >
+                {t("detail.checkMatch")}
+              </Link>
+            ) : null}
           </div>
 
           <div>

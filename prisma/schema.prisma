@@ -103,6 +103,17 @@ model GeneratedDraft {
   @@index([applicationId, createdAt])
 }
 
+// A resume version used for keyword matching against job descriptions.
+model Resume {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  fileName  String?
+  text      String
+  isDefault Boolean  @default(false)
+}
+
 model DailyGoal {
   id          String @id @default(cuid())
   date        String @unique // YYYY-MM-DD

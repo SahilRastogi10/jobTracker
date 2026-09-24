@@ -15,6 +15,13 @@ Everything runs on your own machine. The AI features use local [Ollama](https://
 - **Stats**: applications by stage, follow-up health, reminder load, and how many assistant drafts passed review.
 - **CSV export** of all applications with their recruiters and follow-ups.
 
+**Resume match**
+
+- Save several resume versions (upload a PDF or paste the text) and compare any of them with a job description, given as a link or pasted text.
+- Get a **match score out of 100** and the **missing keywords**, with required ones first. Keywords come from a built-in list of about 250 skills and tools that understands common spellings ("Postgres", "k8s", "ReactJS"), weighted by whether the posting lists them as required, mentioned, or preferred.
+- Optionally let the local model add job-specific terms the list doesn't know; only terms that actually appear in the posting are kept.
+- Open it straight from an application with **Check resume match**.
+
 **Per application**
 
 - **Follow-ups** with a due date, channel (email, LinkedIn, other), status (planned, sent, skipped), and recipient. Reminders attach to a follow-up and move with it.
@@ -99,9 +106,10 @@ All settings live in `.env`. See `.env.example` for the full list.
 app/                  Pages and API routes
   api/                Applications, follow-ups, recruiters, reminders, drafts, calendar, stats
   applications/       Pipeline and application detail pages
+  match/              Resume versions and keyword matching
   calendar/           Month view with the day panel
 src/components/       App shell, assistant review queue, language provider, stage picker
-src/lib/              Retrieval, prompts, drafts, follow-ups, translations
+src/lib/              Retrieval, prompts, drafts, follow-ups, keyword matching, translations
 prisma/               Schema and migrations
 extension/            Chrome/Edge extension
 ```
