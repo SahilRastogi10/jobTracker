@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "date is required (YYYY-MM-DD)" }, { status: 400 });
   }
 
-  const [applications, reminders, followUps] = await Promise.all([
+  const [applications, reminders, followUps, note] = await Promise.all([
     prisma.application.findMany({
       where: { dateApplied: date },
       orderBy: [{ createdAt: "desc" }],
@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       include: followUpListInclude,
       orderBy: { createdAt: "asc" },
     }),
+    prisma.dailyNote.findUnique({ where: { date }, select: { text: true } }),
   ]);
 
   return NextResponse.json({
@@ -37,5 +38,6 @@ export async function GET(req: Request) {
     applications,
     reminders,
     followUps: followUps.map(serializeFollowUp),
+    note: note?.text ?? "",
   });
 }

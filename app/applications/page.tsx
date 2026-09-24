@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/components/LanguageProvider";
 import { PageFrame } from "@/components/PageFrame";
+import { STAGES, StagePicker } from "@/components/StagePicker";
 
 type Application = {
   id: string;
@@ -29,12 +30,23 @@ function stageBadgeClass(stage: string) {
 }
 
 export default function ApplicationsPage() {
-  const { t, tValue } = useI18n();
+  const { t, tValue, dateLocale } = useI18n();
+
+  const formatDate = (value: string) => {
+    const [y, m, d] = value.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(dateLocale, {
+      month: "short",
+      day: "numeric",
+      year: y === new Date().getFullYear() ? undefined : "numeric",
+    });
+  };
   const [items, setItems] = useState<Application[]>([]);
   const [stage, setStage] = useState<string>("");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [movedId, setMovedId] = useState<string | null>(null);
 
   const reqIdRef = useRef(0);
 
@@ -69,13 +81,40 @@ export default function ApplicationsPage() {
     void load(stage, debouncedQ);
   }, [stage, debouncedQ]);
 
+  // Pipeline order, so groups don't jump around when a card changes stage.
   const grouped = useMemo(() => {
     const m: Record<string, Application[]> = {};
     for (const item of items) {
       (m[item.stage] ??= []).push(item);
     }
-    return m;
+    const known = STAGES.filter((value) => m[value]);
+    const other = Object.keys(m).filter((value) => !(STAGES as readonly string[]).includes(value));
+    return [...known, ...other].map((value) => [value, m[value]] as const);
   }, [items]);
+
+  async function changeStage(application: Application, nextStage: string) {
+    const previous = application.stage;
+    setError(null);
+    setItems((current) =>
+      current.map((item) => (item.id === application.id ? { ...item, stage: nextStage } : item))
+    );
+    setMovedId(application.id);
+    window.setTimeout(() => setMovedId((id) => (id === application.id ? null : id)), 1500);
+
+    try {
+      const res = await fetch(`/api/applications/${application.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: nextStage }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setItems((current) =>
+        current.map((item) => (item.id === application.id ? { ...item, stage: previous } : item))
+      );
+      setError(t("pipeline.errStage"));
+    }
+  }
 
   const hasFilters = stage !== "" || debouncedQ.trim() !== "";
 
@@ -93,6 +132,8 @@ export default function ApplicationsPage() {
         </>
       }
     >
+      {error ? <div className="error-banner">{error}</div> : null}
+
       <section className="panel-card space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
@@ -119,7 +160,7 @@ export default function ApplicationsPage() {
               onChange={(e) => setStage(e.target.value)}
             >
               <option value="">{t("pipeline.all")}</option>
-              {["applied", "interview", "rejected", "offer"].map((value) => (
+              {STAGES.map((value) => (
                 <option key={value} value={value}>
                   {tValue("stage", value)}
                 </option>
@@ -142,7 +183,7 @@ export default function ApplicationsPage() {
         </section>
       ) : (
         <div className="space-y-5">
-          {Object.entries(grouped).map(([group, list]) => (
+          {grouped.map(([group, list]) => (
             <section key={group} className="panel-card space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -155,25 +196,30 @@ export default function ApplicationsPage() {
 
               <ul className="space-y-3">
                 {list.map((application) => (
-                  <li key={application.id} className="list-card">
+                  <li
+                    key={application.id}
+                    className={`list-card ${movedId === application.id ? "just-moved" : ""}`}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-2">
                         <div>
                           <div className="text-lg font-semibold">{application.company}</div>
                           <div className="section-subtitle">{application.role}</div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className={stageBadgeClass(application.stage)}>
-                            {tValue("stage", application.stage)}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StagePicker
+                            stage={application.stage}
+                            onChange={(value) => void changeStage(application, value)}
+                            label={t("pipeline.changeStage", { company: application.company })}
+                          />
+                          <span className="section-subtitle">
+                            {t("pipeline.applied", { date: formatDate(application.dateApplied) })}
+                            {application.nextFollowUpDate
+                              ? ` | ${t("pipeline.followUp", {
+                                  date: formatDate(application.nextFollowUpDate),
+                                })}`
+                              : ""}
                           </span>
-                          <span className="badge badge-neutral">
-                            {t("pipeline.applied", { date: application.dateApplied })}
-                          </span>
-                          {application.nextFollowUpDate ? (
-                            <span className="badge badge-neutral">
-                              {t("pipeline.followUp", { date: application.nextFollowUpDate })}
-                            </span>
-                          ) : null}
                         </div>
                       </div>
 

@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const [apps, rems, followUps] = await Promise.all([
+  const [apps, rems, followUps, notes] = await Promise.all([
     prisma.application.findMany({
       where: { dateApplied: { gte: start, lte: end } },
       select: { id: true, dateApplied: true, company: true, role: true, stage: true },
@@ -30,6 +30,10 @@ export async function GET(req: Request) {
     prisma.followUp.findMany({
       where: { status: "planned", dueDate: { gte: start, lte: end } },
       select: { dueDate: true },
+    }),
+    prisma.dailyNote.findMany({
+      where: { date: { gte: start, lte: end }, text: { not: "" } },
+      select: { date: true },
     }),
   ]);
 
@@ -48,5 +52,6 @@ export async function GET(req: Request) {
     appsByDate,
     remsByDate,
     followUpsByDate,
+    notedDates: notes.map((note) => note.date),
   });
 }

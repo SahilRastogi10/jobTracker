@@ -6,15 +6,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { localYYYYMMDD } from "@/lib/localDate";
 
+// Saves the note for body.date (YYYY-MM-DD), or today's note when no date is given.
 export async function PATCH(req: Request) {
   const body = await req.json();
-  const today = localYYYYMMDD();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(body.date ?? ""))
+    ? String(body.date)
+    : localYYYYMMDD();
   const text = String(body.text ?? "");
 
   const note = await prisma.dailyNote.upsert({
-    where: { date: today },
+    where: { date },
     update: { text },
-    create: { date: today, text },
+    create: { date, text },
   });
 
   return NextResponse.json({ note });
