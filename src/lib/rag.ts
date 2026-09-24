@@ -1,13 +1,8 @@
-const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
-const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
-const DEFAULT_OPENAI_RESPONSE_MODEL = "gpt-5.4-mini";
-const DEFAULT_OLLAMA_EMBEDDING_MODEL = "nomic-embed-text";
-const DEFAULT_OLLAMA_RESPONSE_MODEL = "qwen3:8b";
+const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
+const DEFAULT_RESPONSE_MODEL = "qwen3:8b";
 const DEFAULT_CHUNK_SIZE = 1200;
 const DEFAULT_CHUNK_OVERLAP = 200;
-
-type RagProvider = "openai" | "ollama";
 
 type ResponsesContentItem = {
   type?: string;
@@ -18,7 +13,7 @@ type ResponsesOutputItem = {
   content?: ResponsesContentItem[];
 };
 
-type OpenAIResponsesResult = {
+type ResponsesResult = {
   output_text?: string;
   output?: ResponsesOutputItem[];
   error?: {
@@ -26,7 +21,7 @@ type OpenAIResponsesResult = {
   };
 };
 
-type OpenAIEmbeddingsResult = {
+type EmbeddingsResult = {
   data?: Array<{
     embedding?: number[];
   }>;
@@ -35,43 +30,21 @@ type OpenAIEmbeddingsResult = {
   };
 };
 
-export function getRagProvider(): RagProvider {
-  return process.env.RAG_PROVIDER?.toLowerCase() === "openai" ? "openai" : "ollama";
-}
-
 function getApiBaseUrl() {
-  return getRagProvider() === "ollama"
-    ? process.env.OLLAMA_BASE_URL ?? OLLAMA_BASE_URL
-    : process.env.OPENAI_BASE_URL ?? OPENAI_BASE_URL;
+  return process.env.OLLAMA_BASE_URL ?? OLLAMA_BASE_URL;
 }
 
+// A local Ollama server ignores keys; one is only needed for a hosted endpoint.
 function getApiKey() {
-  if (getRagProvider() === "ollama") {
-    return process.env.OLLAMA_API_KEY?.trim() || null;
-  }
-
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY for RAG_PROVIDER=openai.");
-  }
-
-  return apiKey;
+  return process.env.OLLAMA_API_KEY?.trim() || null;
 }
 
 function getEmbeddingModel() {
-  return getRagProvider() === "ollama"
-    ? process.env.OLLAMA_RAG_EMBEDDING_MODEL ?? DEFAULT_OLLAMA_EMBEDDING_MODEL
-    : process.env.OPENAI_RAG_EMBEDDING_MODEL ?? DEFAULT_OPENAI_EMBEDDING_MODEL;
+  return process.env.OLLAMA_RAG_EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL;
 }
 
 export function getResponseModel() {
-  return getRagProvider() === "ollama"
-    ? process.env.OLLAMA_RAG_RESPONSE_MODEL ?? DEFAULT_OLLAMA_RESPONSE_MODEL
-    : process.env.OPENAI_RAG_RESPONSE_MODEL ?? DEFAULT_OPENAI_RESPONSE_MODEL;
-}
-
-function getReasoningEffort() {
-  return process.env.OPENAI_RAG_REASONING_EFFORT ?? "low";
+  return process.env.OLLAMA_RAG_RESPONSE_MODEL ?? DEFAULT_RESPONSE_MODEL;
 }
 
 async function ragRequest<T>(path: string, body: Record<string, unknown>) {
@@ -99,7 +72,7 @@ async function ragRequest<T>(path: string, body: Record<string, unknown>) {
     const message =
       typeof data?.error?.message === "string"
         ? data.error.message
-        : `RAG provider request failed with status ${res.status}.`;
+        : `Ollama request failed with status ${res.status}.`;
     throw new Error(message);
   }
 
@@ -173,7 +146,7 @@ export function cosineSimilarity(left: number[], right: number[]) {
 export async function createEmbeddings(inputs: string[]) {
   if (inputs.length === 0) return [];
 
-  const data = await ragRequest<OpenAIEmbeddingsResult>("/embeddings", {
+  const data = await ragRequest<EmbeddingsResult>("/embeddings", {
     model: getEmbeddingModel(),
     input: inputs,
   });
@@ -181,7 +154,7 @@ export async function createEmbeddings(inputs: string[]) {
   return (data.data ?? []).map((item) => item.embedding ?? []);
 }
 
-function extractOutputText(result: OpenAIResponsesResult) {
+function extractOutputText(result: ResponsesResult) {
   if (typeof result.output_text === "string" && result.output_text.trim()) {
     return result.output_text.trim();
   }
@@ -219,13 +192,7 @@ export async function generateText(systemPrompt: string, userPrompt: string) {
     input: userPrompt,
   };
 
-  if (getRagProvider() === "openai") {
-    body.reasoning = {
-      effort: getReasoningEffort(),
-    };
-  }
-
-  const data = await ragRequest<OpenAIResponsesResult>("/responses", body);
+  const data = await ragRequest<ResponsesResult>("/responses", body);
 
   const text = stripThinking(extractOutputText(data));
   if (!text) {

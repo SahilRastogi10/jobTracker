@@ -8,7 +8,6 @@ import { localYYYYMMDD } from "@/lib/localDate";
 import {
   answerWithRetrievedContext,
   draftFollowUpMessage,
-  getRagProvider,
   getResponseModel,
 } from "@/lib/rag";
 import { ContextUnavailableError, matchLabel, retrieveContext } from "@/lib/retrieval";
@@ -83,7 +82,7 @@ export async function POST(req: Request) {
           prompt: question,
           content,
           citations: JSON.stringify(matches),
-          provider: getRagProvider(),
+          provider: "ollama",
           model: getResponseModel(),
         },
       });
@@ -153,7 +152,7 @@ export async function POST(req: Request) {
         prompt: details,
         content,
         citations: JSON.stringify(matches),
-        provider: getRagProvider(),
+        provider: "ollama",
         model: getResponseModel(),
       },
     });

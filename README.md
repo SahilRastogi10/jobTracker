@@ -15,7 +15,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## AI features (free, local by default)
 
-The RAG features run on [Ollama](https://ollama.com) by default, so no paid API is needed.
+The AI features run locally on [Ollama](https://ollama.com), so no paid API is needed.
 
 1. Install Ollama and make sure it is running.
 2. Pull the default models:
@@ -25,8 +25,7 @@ The RAG features run on [Ollama](https://ollama.com) by default, so no paid API 
    ollama pull nomic-embed-text
    ```
 
-3. Keep `RAG_PROVIDER="ollama"` in `.env` (this is also the default when unset).
-4. On an application's page, click **Sync context** to fetch and embed the job posting, notes, and recruiter context, then ask questions against it.
+3. On an application's page, click **Sync context** to fetch and embed the job posting, notes, and recruiter context, then ask questions against it.
 
 On machines with limited memory, `qwen3:4b` is a lighter alternative for `OLLAMA_RAG_RESPONSE_MODEL`.
 
@@ -39,10 +38,6 @@ The assistant drafts follow-up messages and answers questions about an applicati
 - A follow-up with an attached draft cannot be marked sent until that draft is approved.
 
 Set `APPLICANT_NAME` in `.env` so drafted messages are signed with your name.
-
-### Using OpenAI instead (optional, paid)
-
-Set `RAG_PROVIDER="openai"` and uncomment the `OPENAI_*` settings in `.env`. Embeddings from different providers are not compatible, so re-sync each application's context after switching.
 
 ## Contact research (optional)
 
