@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n/messages";
 
 type DraftKind = "follow_up_email" | "qa_answer";
 type DraftStatus = "pending_review" | "approved" | "rejected";
@@ -26,6 +28,7 @@ type Draft = {
   provider: string;
   model: string;
   status: DraftStatus;
+  language: string;
   reviewedAt?: string | null;
   appliedAt?: string | null;
   recruiterId?: string | null;
@@ -54,29 +57,13 @@ type ApplicationAssistantProps = {
   onApplicationChanged: () => void;
 };
 
-const QUICK_QUESTIONS = [
-  "Summarize this role and the biggest priorities.",
-  "What skills or experience should I emphasize if I hear back?",
-  "What should I ask the recruiter about this role?",
-] as const;
+const QUICK_QUESTIONS: MessageKey[] = ["assistant.quick1", "assistant.quick2", "assistant.quick3"];
 
-const STATUS_BADGES: Record<DraftStatus, { label: string; className: string }> = {
-  pending_review: { label: "Needs review", className: "badge badge-applied" },
-  approved: { label: "Approved", className: "badge badge-offer" },
-  rejected: { label: "Rejected", className: "badge badge-rejected" },
+const STATUS_BADGES: Record<DraftStatus, { label: MessageKey; className: string }> = {
+  pending_review: { label: "assistant.statusPending", className: "badge badge-applied" },
+  approved: { label: "assistant.statusApproved", className: "badge badge-offer" },
+  rejected: { label: "assistant.statusRejected", className: "badge badge-rejected" },
 };
-
-function formatSourceType(sourceType: string) {
-  return sourceType
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function recruiterLabel(recruiter: AssistantRecruiter, index: number) {
-  return recruiter.name || recruiter.email || `Recruiter ${index + 1}`;
-}
 
 // Drafts for email start with "Subject: ..." followed by the body.
 function splitSubject(text: string) {
@@ -101,9 +88,13 @@ export function ApplicationAssistant({
   onFollowUpsChanged,
   onApplicationChanged,
 }: ApplicationAssistantProps) {
+  const { t, tValue, locale, dateLocale } = useI18n();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [mode, setMode] = useState<DraftKind>("follow_up_email");
-  const [question, setQuestion] = useState<string>(QUICK_QUESTIONS[0]);
+  // A picked quick question stays a key so it follows the language toggle; typing replaces it.
+  const [quickQuestion, setQuickQuestion] = useState<MessageKey | null>(QUICK_QUESTIONS[0]);
+  const [customQuestion, setCustomQuestion] = useState("");
+  const question = quickQuestion ? t(quickQuestion) : customQuestion;
   const [instructions, setInstructions] = useState("");
   const [targetFollowUpId, setTargetFollowUpId] = useState("");
   const [recruiterId, setRecruiterId] = useState("");
@@ -113,6 +104,24 @@ export function ApplicationAssistant({
   const [attachTargets, setAttachTargets] = useState<Record<string, string>>({});
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [audio, setAudio] = useState<{ draftId: string; state: "loading" | "playing" } | null>(
+    null
+  );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Audio per draft text, so replaying does not spend more ElevenLabs quota.
+  const audioCache = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    const cache = audioCache.current;
+    return () => {
+      audioRef.current?.pause();
+      cache.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  function recruiterLabel(recruiter: AssistantRecruiter, index: number) {
+    return recruiter.name || recruiter.email || t("detail.recruiterN", { n: index + 1 });
+  }
 
   const plannedFollowUps = followUps.filter((followUp) => followUp.status === "planned");
 
@@ -123,7 +132,7 @@ export function ApplicationAssistant({
       );
       setDrafts(data.items ?? []);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load drafts.");
+      setError(loadError instanceof Error ? loadError.message : t("assistant.errLoad"));
     }
   }
 
@@ -148,9 +157,10 @@ export function ApplicationAssistant({
 
     const body =
       mode === "qa_answer"
-        ? { kind: mode, question }
+        ? { kind: mode, question, language: locale }
         : {
             kind: mode,
+            language: locale,
             followUpId: targetFollowUpId || undefined,
             recruiterId: recruiterId || undefined,
             instructions,
@@ -168,7 +178,7 @@ export function ApplicationAssistant({
       setDrafts((current) => [data.item, ...current]);
     } catch (generateError) {
       setError(
-        generateError instanceof Error ? generateError.message : "Could not generate a draft."
+        generateError instanceof Error ? generateError.message : t("assistant.errGenerate")
       );
     } finally {
       setGenerating(false);
@@ -192,14 +202,14 @@ export function ApplicationAssistant({
       // An edited or rejected draft blocks any follow-up it is attached to.
       onFollowUpsChanged();
     } catch (reviewError) {
-      setError(reviewError instanceof Error ? reviewError.message : "Could not update draft.");
+      setError(reviewError instanceof Error ? reviewError.message : t("assistant.errUpdate"));
     } finally {
       setBusyDraftId(null);
     }
   }
 
   async function deleteDraft(draft: Draft) {
-    if (!confirm("Delete this draft?")) return;
+    if (!confirm(t("assistant.confirmDelete"))) return;
     setBusyDraftId(draft.id);
 
     try {
@@ -207,7 +217,7 @@ export function ApplicationAssistant({
       setDrafts((current) => current.filter((item) => item.id !== draft.id));
       onFollowUpsChanged();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Could not delete draft.");
+      setError(deleteError instanceof Error ? deleteError.message : t("assistant.errDelete"));
     } finally {
       setBusyDraftId(null);
     }
@@ -235,7 +245,7 @@ export function ApplicationAssistant({
       replaceDraft(data.item);
       return data.text;
     } catch (applyError) {
-      setError(applyError instanceof Error ? applyError.message : "Could not use draft.");
+      setError(applyError instanceof Error ? applyError.message : t("assistant.errUse"));
       return null;
     } finally {
       setBusyDraftId(null);
@@ -246,7 +256,7 @@ export function ApplicationAssistant({
     const text = await applyDraft(draft, "export");
     if (text === null) return;
     await navigator.clipboard.writeText(text);
-    setNotice("Copied to clipboard.");
+    setNotice(t("assistant.copied"));
   }
 
   async function emailDraft(draft: Draft) {
@@ -265,14 +275,55 @@ export function ApplicationAssistant({
     const text = await applyDraft(draft, "follow_up", followUpId);
     if (text === null) return;
     onFollowUpsChanged();
-    setNotice("Draft attached to the follow-up.");
+    setNotice(t("assistant.attached"));
   }
 
   async function appendToNotes(draft: Draft) {
     const text = await applyDraft(draft, "notes");
     if (text === null) return;
     onApplicationChanged();
-    setNotice("Answer appended to the application notes.");
+    setNotice(t("assistant.appended"));
+  }
+
+  function stopAudio() {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setAudio(null);
+  }
+
+  async function listen(draft: Draft) {
+    if (audio?.draftId === draft.id) {
+      stopAudio();
+      return;
+    }
+
+    stopAudio();
+    setError(null);
+    setAudio({ draftId: draft.id, state: "loading" });
+
+    try {
+      const cacheKey = `${draft.id}:${draft.finalText}`;
+      let url = audioCache.current.get(cacheKey);
+
+      if (!url) {
+        const res = await fetch(`/api/drafts/${draft.id}/speech`, { method: "POST" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(typeof data?.error === "string" ? data.error : t("assistant.errListen"));
+        }
+        url = URL.createObjectURL(await res.blob());
+        audioCache.current.set(cacheKey, url);
+      }
+
+      const player = new Audio(url);
+      audioRef.current = player;
+      player.onended = () => setAudio(null);
+      await player.play();
+      setAudio({ draftId: draft.id, state: "playing" });
+    } catch (listenError) {
+      setAudio(null);
+      setError(listenError instanceof Error ? listenError.message : t("assistant.errListen"));
+    }
   }
 
   return (
@@ -283,13 +334,13 @@ export function ApplicationAssistant({
             className={mode === "follow_up_email" ? "app-button" : "app-button-secondary"}
             onClick={() => setMode("follow_up_email")}
           >
-            Draft a follow-up
+            {t("assistant.draftFollowUp")}
           </button>
           <button
             className={mode === "qa_answer" ? "app-button" : "app-button-secondary"}
             onClick={() => setMode("qa_answer")}
           >
-            Ask about this application
+            {t("assistant.askAbout")}
           </button>
         </div>
 
@@ -297,7 +348,7 @@ export function ApplicationAssistant({
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="field-label" htmlFor="draft-follow-up">
-                For follow-up
+                {t("assistant.forFollowUp")}
               </label>
               <select
                 id="draft-follow-up"
@@ -305,10 +356,13 @@ export function ApplicationAssistant({
                 value={targetFollowUpId}
                 onChange={(e) => setTargetFollowUpId(e.target.value)}
               >
-                <option value="">Not tied to a follow-up (email)</option>
+                <option value="">{t("assistant.notTied")}</option>
                 {plannedFollowUps.map((followUp) => (
                   <option key={followUp.id} value={followUp.id}>
-                    {followUp.dueDate} via {followUp.channel}
+                    {t("assistant.followUpOption", {
+                      date: followUp.dueDate,
+                      channel: tValue("channel", followUp.channel),
+                    })}
                   </option>
                 ))}
               </select>
@@ -316,7 +370,7 @@ export function ApplicationAssistant({
 
             <div>
               <label className="field-label" htmlFor="draft-recruiter">
-                Recipient
+                {t("assistant.recipient")}
               </label>
               <select
                 id="draft-recruiter"
@@ -325,7 +379,7 @@ export function ApplicationAssistant({
                 onChange={(e) => setRecruiterId(e.target.value)}
               >
                 <option value="">
-                  {targetFollowUpId ? "Use the follow-up's recruiter" : "Hiring team"}
+                  {targetFollowUpId ? t("assistant.useFollowUpRecruiter") : t("assistant.hiringTeam")}
                 </option>
                 {recruiters.map((recruiter, index) => (
                   <option key={recruiter.id} value={recruiter.id}>
@@ -337,40 +391,43 @@ export function ApplicationAssistant({
 
             <div className="md:col-span-2">
               <label className="field-label" htmlFor="draft-instructions">
-                Anything to mention (optional)
+                {t("assistant.instructions")}
               </label>
               <textarea
                 id="draft-instructions"
                 className="field-textarea"
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                placeholder="e.g. mention my distributed systems project, keep it brief"
+                placeholder={t("assistant.instructionsPlaceholder")}
               />
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              {QUICK_QUESTIONS.map((prompt) => (
+              {QUICK_QUESTIONS.map((key) => (
                 <button
-                  key={prompt}
-                  className="app-button-secondary"
-                  onClick={() => setQuestion(prompt)}
+                  key={key}
+                  className={quickQuestion === key ? "app-button" : "app-button-secondary"}
+                  onClick={() => setQuickQuestion(key)}
                 >
-                  {prompt}
+                  {t(key)}
                 </button>
               ))}
             </div>
             <div>
               <label className="field-label" htmlFor="draft-question">
-                Question
+                {t("assistant.question")}
               </label>
               <textarea
                 id="draft-question"
                 className="field-textarea"
                 value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="What should I emphasize for this role?"
+                onChange={(e) => {
+                  setQuickQuestion(null);
+                  setCustomQuestion(e.target.value);
+                }}
+                placeholder={t("assistant.questionPlaceholder")}
               />
             </div>
           </div>
@@ -378,16 +435,15 @@ export function ApplicationAssistant({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="section-subtitle">
-            {hasContext
-              ? "Output goes to the review queue below. Nothing is used until you approve it."
-              : "Sync context first so the assistant has sources to ground its output."}
+            {hasContext ? t("assistant.hintReady") : t("assistant.hintNoContext")}{" "}
+            {t("assistant.writtenIn", { language: t(locale === "es" ? "language.es" : "language.en") })}
           </div>
           <button
             className="app-button"
             onClick={generate}
             disabled={generating || !hasContext}
           >
-            {generating ? "Generating..." : "Generate draft"}
+            {generating ? t("assistant.generating") : t("assistant.generate")}
           </button>
         </div>
       </div>
@@ -397,14 +453,16 @@ export function ApplicationAssistant({
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="section-title">Review queue</div>
+          <div className="section-title">{t("assistant.reviewQueue")}</div>
           <div className="badge badge-neutral">
-            {drafts.filter((draft) => draft.status === "pending_review").length} awaiting review
+            {t("assistant.awaiting", {
+              count: drafts.filter((draft) => draft.status === "pending_review").length,
+            })}
           </div>
         </div>
 
         {drafts.length === 0 ? (
-          <div className="empty-state">No drafts yet.</div>
+          <div className="empty-state">{t("assistant.noDrafts")}</div>
         ) : (
           drafts.map((draft) => {
             const badge = STATUS_BADGES[draft.status];
@@ -418,26 +476,31 @@ export function ApplicationAssistant({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="font-semibold">
-                      {draft.kind === "follow_up_email" ? "Follow-up draft" : "Answer"}
+                      {draft.kind === "follow_up_email" ? t("assistant.followUpDraft") : t("assistant.answer")}
                     </div>
                     <div className="section-subtitle">
-                      {new Date(draft.createdAt).toLocaleString()} | {draft.provider} ·{" "}
+                      {new Date(draft.createdAt).toLocaleString(dateLocale)} | {draft.provider} |{" "}
                       {draft.model}
-                      {draft.editedContent ? " | edited" : ""}
+                      {draft.editedContent ? t("assistant.edited") : ""}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <span className={badge.className}>{badge.label}</span>
-                    {draft.appliedAt ? <span className="badge badge-neutral">Used</span> : null}
+                    <span className="badge badge-neutral">{draft.language.toUpperCase()}</span>
+                    <span className={badge.className}>{t(badge.label)}</span>
+                    {draft.appliedAt ? (
+                      <span className="badge badge-neutral">{t("assistant.used")}</span>
+                    ) : null}
                   </div>
                 </div>
 
                 {draft.kind === "qa_answer" ? (
-                  <div className="section-subtitle">Q: {draft.prompt}</div>
+                  <div className="section-subtitle">
+                    {t("assistant.questionPrefix", { prompt: draft.prompt })}
+                  </div>
                 ) : (
                   <details>
                     <summary className="section-subtitle cursor-pointer">
-                      What the model was given
+                      {t("assistant.modelGiven")}
                     </summary>
                     <div className="result-snippet whitespace-pre-wrap">{draft.prompt}</div>
                   </details>
@@ -459,7 +522,7 @@ export function ApplicationAssistant({
                       onClick={() => review(draft, "edit")}
                       disabled={isBusy}
                     >
-                      Save edit
+                      {t("assistant.saveEdit")}
                     </button>
                   ) : null}
                   {draft.status === "pending_review" ? (
@@ -467,9 +530,9 @@ export function ApplicationAssistant({
                       className="app-button"
                       onClick={() => review(draft, "approve")}
                       disabled={isBusy || isEdited}
-                      title={isEdited ? "Save your edit before approving" : undefined}
+                      title={isEdited ? t("assistant.saveBeforeApprove") : undefined}
                     >
-                      Approve
+                      {t("assistant.approve")}
                     </button>
                   ) : null}
                   {draft.status !== "rejected" ? (
@@ -478,15 +541,26 @@ export function ApplicationAssistant({
                       onClick={() => review(draft, "reject")}
                       disabled={isBusy}
                     >
-                      Reject
+                      {t("assistant.reject")}
                     </button>
                   ) : null}
+                  <button
+                    className="app-button-secondary"
+                    onClick={() => listen(draft)}
+                    disabled={audio?.draftId === draft.id && audio.state === "loading"}
+                  >
+                    {audio?.draftId === draft.id
+                      ? audio.state === "loading"
+                        ? t("assistant.loadingAudio")
+                        : t("assistant.stop")
+                      : t("assistant.listen")}
+                  </button>
                   <button
                     className="app-button-ghost"
                     onClick={() => deleteDraft(draft)}
                     disabled={isBusy}
                   >
-                    Delete
+                    {t("common.delete")}
                   </button>
                 </div>
 
@@ -497,7 +571,7 @@ export function ApplicationAssistant({
                       onClick={() => copyDraft(draft)}
                       disabled={isBusy}
                     >
-                      Copy
+                      {t("assistant.copy")}
                     </button>
                     {draft.kind === "follow_up_email" ? (
                       <>
@@ -506,7 +580,7 @@ export function ApplicationAssistant({
                           onClick={() => emailDraft(draft)}
                           disabled={isBusy}
                         >
-                          Open in email
+                          {t("assistant.openEmail")}
                         </button>
                         {plannedFollowUps.length > 0 ? (
                           <>
@@ -522,7 +596,10 @@ export function ApplicationAssistant({
                             >
                               {plannedFollowUps.map((followUp) => (
                                 <option key={followUp.id} value={followUp.id}>
-                                  {followUp.dueDate} via {followUp.channel}
+                                  {t("assistant.followUpOption", {
+                                    date: followUp.dueDate,
+                                    channel: tValue("channel", followUp.channel),
+                                  })}
                                 </option>
                               ))}
                             </select>
@@ -531,7 +608,7 @@ export function ApplicationAssistant({
                               onClick={() => attachDraft(draft)}
                               disabled={isBusy}
                             >
-                              Attach to follow-up
+                              {t("assistant.attach")}
                             </button>
                           </>
                         ) : null}
@@ -542,20 +619,20 @@ export function ApplicationAssistant({
                         onClick={() => appendToNotes(draft)}
                         disabled={isBusy}
                       >
-                        Append to notes
+                        {t("assistant.appendNotes")}
                       </button>
                     )}
                   </div>
                 ) : draft.status === "pending_review" ? (
                   <div className="section-subtitle">
-                    Approve this draft to copy, email, attach, or save it.
+                    {t("assistant.approveToUse")}
                   </div>
                 ) : null}
 
                 {draft.citations.length > 0 ? (
                   <details>
                     <summary className="section-subtitle cursor-pointer">
-                      {draft.citations.length} retrieved sources
+                      {t("assistant.sources", { count: draft.citations.length })}
                     </summary>
                     <div className="scroll-panel mt-2 space-y-2">
                       {draft.citations.map((citation, index) => (
@@ -564,10 +641,12 @@ export function ApplicationAssistant({
                             <div className="font-semibold">
                               [{index + 1}] {citation.title}
                             </div>
-                            <span className="badge badge-neutral">score {citation.score}</span>
+                            <span className="badge badge-neutral">
+                              {t("assistant.score", { score: citation.score })}
+                            </span>
                           </div>
                           <div className="section-subtitle">
-                            {formatSourceType(citation.sourceType)}
+                            {tValue("sourceType", citation.sourceType)}
                           </div>
                           <div className="result-snippet">{citation.content}</div>
                           {citation.url ? (
@@ -577,7 +656,7 @@ export function ApplicationAssistant({
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Open source
+                              {t("common.openSource")}
                             </a>
                           ) : null}
                         </div>

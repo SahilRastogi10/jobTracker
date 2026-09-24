@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { PageFrame } from "@/components/PageFrame";
 import { localYYYYMMDD } from "@/lib/localDate";
 
@@ -88,6 +89,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function CalendarPage() {
+  const { t, tValue, dateLocale } = useI18n();
   const todayStr = localYYYYMMDD();
   const todayDate = useMemo(() => {
     const [y, m, d] = todayStr.split("-").map(Number);
@@ -122,8 +124,17 @@ export default function CalendarPage() {
 
   const monthLabel = useMemo(() => {
     const d = new Date(year, monthIndex, 1);
-    return d.toLocaleString(undefined, { month: "long", year: "numeric" });
-  }, [year, monthIndex]);
+    return d.toLocaleString(dateLocale, { month: "long", year: "numeric" });
+  }, [year, monthIndex, dateLocale]);
+
+  // 2023-01-01 was a Sunday, so these are Sun..Sat in the active language.
+  const weekdayLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) =>
+        new Date(2023, 0, 1 + index).toLocaleDateString(dateLocale, { weekday: "short" })
+      ),
+    [dateLocale]
+  );
 
   async function loadCounts() {
     setCountsLoading(true);
@@ -136,7 +147,7 @@ export default function CalendarPage() {
       setRemsByDate(data.remsByDate ?? {});
       setFollowUpsByDate(data.followUpsByDate ?? {});
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load month counts."));
+      setError(getErrorMessage(loadError, t("calendar.errCounts")));
     } finally {
       setCountsLoading(false);
     }
@@ -153,7 +164,7 @@ export default function CalendarPage() {
       setDayRems(data.reminders ?? []);
       setDayFollowUps(data.followUps ?? []);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load date details."));
+      setError(getErrorMessage(loadError, t("calendar.errDay")));
     } finally {
       setDayLoading(false);
     }
@@ -173,6 +184,8 @@ export default function CalendarPage() {
 
     setError(null);
     void loadDay(selectedDate);
+    // Reload on data changes only; switching language needs no refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
 
   const days = useMemo(() => {
@@ -212,7 +225,7 @@ export default function CalendarPage() {
 
       await loadDay(selectedDate);
     } catch (toggleError) {
-      setError(getErrorMessage(toggleError, "Could not update reminder."));
+      setError(getErrorMessage(toggleError, t("calendar.errReminder")));
     } finally {
       setBusyReminderId(null);
     }
@@ -232,31 +245,31 @@ export default function CalendarPage() {
 
   return (
     <PageFrame
-      eyebrow="Calendar"
-      title="The month at a glance"
-      subtitle="Pick a day to see what you applied to, what is due, and who to follow up with."
-      actions={countsLoading ? <div className="badge badge-neutral">Loading...</div> : null}
+      eyebrow={t("calendar.eyebrow")}
+      title={t("calendar.title")}
+      subtitle={t("calendar.subtitle")}
+      actions={countsLoading ? <div className="badge badge-neutral">{t("common.loading")}</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="panel-card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button className="app-button-secondary" onClick={prevMonth}>
-            Prev
+            {t("calendar.prev")}
           </button>
 
           <div className="text-center">
             <div className="section-title">{monthLabel}</div>
-            <div className="section-subtitle">Applications, reminders, and follow-ups by day</div>
+            <div className="section-subtitle">{t("calendar.byDay")}</div>
           </div>
 
           <button className="app-button-secondary" onClick={nextMonth}>
-            Next
+            {t("calendar.next")}
           </button>
         </div>
 
         <div className="grid grid-cols-7 gap-2 text-sm">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          {weekdayLabels.map((day) => (
             <div key={day} className="py-2 text-center font-semibold text-[color:var(--muted)]">
               {day}
             </div>
@@ -304,17 +317,21 @@ export default function CalendarPage() {
                 <div className="mt-2 space-y-1 text-xs font-semibold">
                   {aCount > 0 ? (
                     <div className="text-[color:var(--stage-applied)]">
-                      {aCount} applied
+                      {t("calendar.appliedCount", { count: aCount })}
                     </div>
                   ) : null}
                   {fCount > 0 ? (
                     <div className="text-[color:var(--accent)]">
-                      {fCount} follow-up{fCount === 1 ? "" : "s"}
+                      {fCount === 1
+                        ? t("calendar.followUpOne")
+                        : t("calendar.followUpMany", { count: fCount })}
                     </div>
                   ) : null}
                   {rCount > 0 ? (
                     <div className="text-[color:var(--stage-interview)]">
-                      {rCount} reminder{rCount === 1 ? "" : "s"}
+                      {rCount === 1
+                        ? t("calendar.reminderOne")
+                        : t("calendar.reminderMany", { count: rCount })}
                     </div>
                   ) : null}
                 </div>
@@ -327,21 +344,21 @@ export default function CalendarPage() {
       <section className="panel-card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="section-title">Selected date: {selectedDate}</h2>
+            <h2 className="section-title">{t("calendar.selectedDate", { date: selectedDate })}</h2>
             <p className="section-subtitle">
-              Drill into the day and mark reminders complete right here.
+              {t("calendar.drillHelp")}
             </p>
           </div>
-          {dayLoading ? <div className="badge badge-neutral">Loading...</div> : null}
+          {dayLoading ? <div className="badge badge-neutral">{t("common.loading")}</div> : null}
         </div>
 
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-3">
-            <div className="section-title">Applications</div>
+            <div className="section-title">{t("calendar.applications")}</div>
             {dayLoading && dayApps.length === 0 ? (
-              <div className="empty-state">Loading applications...</div>
+              <div className="empty-state">{t("calendar.loadingApplications")}</div>
             ) : dayApps.length === 0 ? (
-              <div className="empty-state">No applications.</div>
+              <div className="empty-state">{t("calendar.noApplications")}</div>
             ) : (
               <ul className="space-y-3">
                 {dayApps.map((application) => (
@@ -349,9 +366,11 @@ export default function CalendarPage() {
                     <div className="space-y-2">
                       <div className="font-semibold">{application.company}</div>
                       <div className="section-subtitle">{application.role}</div>
-                      <div className="badge badge-neutral">{application.stage}</div>
+                      <div className={`badge badge-${application.stage}`}>
+                        {tValue("stage", application.stage)}
+                      </div>
                       <Link className="subtle-link" href={`/applications/${application.id}`}>
-                        Edit
+                        {t("common.edit")}
                       </Link>
                     </div>
                   </li>
@@ -361,11 +380,11 @@ export default function CalendarPage() {
           </div>
 
           <div className="space-y-3">
-            <div className="section-title">Reminders</div>
+            <div className="section-title">{t("calendar.reminders")}</div>
             {dayLoading && dayRems.length === 0 ? (
-              <div className="empty-state">Loading reminders...</div>
+              <div className="empty-state">{t("calendar.loadingReminders")}</div>
             ) : dayRems.length === 0 ? (
-              <div className="empty-state">No reminders.</div>
+              <div className="empty-state">{t("calendar.noReminders")}</div>
             ) : (
               <ul className="space-y-3">
                 {dayRems.map((reminder) => (
@@ -374,7 +393,9 @@ export default function CalendarPage() {
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
                           <span className="badge badge-neutral">{reminder.time}</span>
-                          {reminder.done ? <span className="badge badge-offer">done</span> : null}
+                          {reminder.done ? (
+                            <span className="badge badge-offer">{t("reminders.statusDone")}</span>
+                          ) : null}
                         </div>
                         <div className="font-semibold">{reminder.message}</div>
                         {reminder.application ? (
@@ -385,7 +406,7 @@ export default function CalendarPage() {
                             {reminder.application.company} | {reminder.application.role}
                           </Link>
                         ) : (
-                          <div className="section-subtitle">No linked application</div>
+                          <div className="section-subtitle">{t("calendar.noLinked")}</div>
                         )}
                       </div>
 
@@ -395,10 +416,10 @@ export default function CalendarPage() {
                         disabled={busyReminderId === reminder.id}
                       >
                         {busyReminderId === reminder.id
-                          ? "Saving..."
+                          ? t("common.saving")
                           : reminder.done
-                            ? "Undo"
-                            : "Done"}
+                            ? t("common.undo")
+                            : t("common.done")}
                       </button>
                     </div>
                   </li>
@@ -408,33 +429,37 @@ export default function CalendarPage() {
           </div>
 
           <div className="space-y-3">
-            <div className="section-title">Follow-ups</div>
+            <div className="section-title">{t("calendar.followUps")}</div>
             {dayLoading && dayFollowUps.length === 0 ? (
-              <div className="empty-state">Loading follow-ups...</div>
+              <div className="empty-state">{t("calendar.loadingFollowUps")}</div>
             ) : dayFollowUps.length === 0 ? (
-              <div className="empty-state">No follow-ups.</div>
+              <div className="empty-state">{t("calendar.noFollowUps")}</div>
             ) : (
               <ul className="space-y-3">
                 {dayFollowUps.map((followUp) => (
                   <li key={followUp.id} className="list-card">
                     <div className="space-y-2">
                       <div className="flex flex-wrap gap-2">
-                        <span className="badge badge-neutral">{followUp.channel}</span>
-                        <span className="badge badge-neutral">{followUp.status}</span>
+                        <span className="badge badge-neutral">{tValue("channel", followUp.channel)}</span>
+                        <span className="badge badge-neutral">
+                          {tValue("followUpStatus", followUp.status)}
+                        </span>
                       </div>
                       <div className="font-semibold">
                         {followUp.application.company} | {followUp.application.role}
                       </div>
                       {followUp.recruiter ? (
                         <div className="section-subtitle">
-                          To {followUp.recruiter.name || followUp.recruiter.email}
+                          {t("calendar.to", {
+                            name: followUp.recruiter.name || followUp.recruiter.email || "",
+                          })}
                         </div>
                       ) : null}
                       <Link
                         className="subtle-link"
                         href={`/applications/${followUp.application.id}`}
                       >
-                        Open application
+                        {t("calendar.openApplication")}
                       </Link>
                     </div>
                   </li>

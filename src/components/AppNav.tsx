@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LanguageToggle, useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n/messages";
 
 // Pages dispatch this after changing today's goal or logging an application.
 export const TODAY_CHANGED_EVENT = "tracker:today-changed";
@@ -17,10 +19,10 @@ const iconProps = {
   "aria-hidden": true,
 };
 
-const items = [
+const items: Array<{ href: string; label: MessageKey; icon: React.ReactNode }> = [
   {
     href: "/",
-    label: "Today",
+    label: "nav.today",
     icon: (
       <svg {...iconProps}>
         <circle cx="12" cy="12" r="4" />
@@ -30,7 +32,7 @@ const items = [
   },
   {
     href: "/applications",
-    label: "Pipeline",
+    label: "nav.pipeline",
     icon: (
       <svg {...iconProps}>
         <rect x="3" y="4" width="5" height="16" rx="1.5" />
@@ -41,7 +43,7 @@ const items = [
   },
   {
     href: "/reminders",
-    label: "Reminders",
+    label: "nav.reminders",
     icon: (
       <svg {...iconProps}>
         <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z" />
@@ -51,7 +53,7 @@ const items = [
   },
   {
     href: "/calendar",
-    label: "Calendar",
+    label: "nav.calendar",
     icon: (
       <svg {...iconProps}>
         <rect x="3.5" y="5" width="17" height="15" rx="2" />
@@ -61,7 +63,7 @@ const items = [
   },
   {
     href: "/stats",
-    label: "Stats",
+    label: "nav.stats",
     icon: (
       <svg {...iconProps}>
         <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
@@ -72,6 +74,7 @@ const items = [
 
 function NavLinks() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <nav className="app-nav">
@@ -88,7 +91,7 @@ function NavLinks() {
             className={`app-nav-link ${isActive ? "is-active" : ""}`}
           >
             {item.icon}
-            {item.label}
+            {t(item.label)}
           </Link>
         );
       })}
@@ -98,6 +101,7 @@ function NavLinks() {
 
 function SidebarGoal() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const [goal, setGoal] = useState<{ done: number; target: number } | null>(null);
 
   useEffect(() => {
@@ -134,10 +138,10 @@ function SidebarGoal() {
 
   return (
     <div className="sidebar-goal space-y-3">
-      <div className="mini-stat-label">Today&apos;s goal</div>
+      <div className="mini-stat-label">{t("nav.goalLabel")}</div>
       <div className="flex items-baseline gap-1.5">
         <span className="sidebar-goal-count">{goal.done}</span>
-        <span className="section-subtitle">of {goal.target} applications</span>
+        <span className="section-subtitle">{t("nav.goalOf", { target: goal.target })}</span>
       </div>
       <div className="goal-meter">
         {Array.from({ length: dots }, (_, index) => (
@@ -149,10 +153,11 @@ function SidebarGoal() {
 }
 
 function Brand() {
+  const { t } = useI18n();
   return (
     <Link href="/" className="app-brand">
       <span className="app-brand-mark">j</span>
-      <span className="app-brand-name">Job Tracker</span>
+      <span className="app-brand-name">{t("nav.brand")}</span>
     </Link>
   );
 }
@@ -163,13 +168,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="app-sidebar">
         <Brand />
         <NavLinks />
-        <SidebarGoal />
+        <div className="px-2">
+          <LanguageToggle />
+        </div>
+        <div className="mt-auto">
+          <SidebarGoal />
+        </div>
       </aside>
 
       <div className="app-main">
         <header className="app-topbar">
           <Brand />
           <NavLinks />
+          <LanguageToggle />
         </header>
         {children}
       </div>

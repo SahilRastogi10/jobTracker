@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { PageFrame } from "@/components/PageFrame";
 
 type StatsResponse = {
@@ -47,6 +48,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function StatsPage() {
+  const { t, tValue } = useI18n();
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export default function StatsPage() {
       const data = await requestJson<StatsResponse>("/api/stats");
       setStats(data);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load stats."));
+      setError(getErrorMessage(loadError, t("stats.errLoad")));
     } finally {
       setLoading(false);
     }
@@ -67,6 +69,8 @@ export default function StatsPage() {
   useEffect(() => {
     setError(null);
     void loadStats();
+    // Reload on data changes only; switching language needs no refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const draftTotal = stats
@@ -78,62 +82,62 @@ export default function StatsPage() {
 
   return (
     <PageFrame
-      eyebrow="Stats"
-      title="How the search is going"
-      subtitle="Your pipeline by stage, follow-up health, reminders, and assistant drafts."
-      actions={loading ? <div className="badge badge-neutral">Refreshing...</div> : null}
+      eyebrow={t("stats.eyebrow")}
+      title={t("stats.title")}
+      subtitle={t("stats.subtitle")}
+      actions={loading ? <div className="badge badge-neutral">{t("stats.refreshing")}</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
 
       {loading && !stats ? (
         <section className="panel-card">
-          <div className="empty-state">Loading stats...</div>
+          <div className="empty-state">{t("stats.loading")}</div>
         </section>
       ) : stats ? (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="panel-card">
-              <div className="mini-stat-label">Applications</div>
+              <div className="mini-stat-label">{t("stats.applications")}</div>
               <div className="mini-stat-value">{stats.totalApplications}</div>
-              <div className="section-subtitle mt-2">All-time tracked roles</div>
+              <div className="section-subtitle mt-2">{t("stats.allTime")}</div>
             </div>
 
             <div className="panel-card">
-              <div className="mini-stat-label">Pending reminders</div>
+              <div className="mini-stat-label">{t("stats.pendingReminders")}</div>
               <div className="mini-stat-value">{stats.reminders.pending}</div>
-              <div className="section-subtitle mt-2">Still need action</div>
+              <div className="section-subtitle mt-2">{t("stats.stillNeedAction")}</div>
             </div>
 
             <div className="panel-card">
-              <div className="mini-stat-label">Completed reminders</div>
+              <div className="mini-stat-label">{t("stats.completedReminders")}</div>
               <div className="mini-stat-value">{stats.reminders.done}</div>
-              <div className="section-subtitle mt-2">Already handled</div>
+              <div className="section-subtitle mt-2">{t("stats.alreadyHandled")}</div>
             </div>
 
             <div className="panel-card">
-              <div className="mini-stat-label">Upcoming follow-ups</div>
+              <div className="mini-stat-label">{t("stats.upcomingFollowUps")}</div>
               <div className="mini-stat-value">{stats.followUps.upcoming}</div>
-              <div className="section-subtitle mt-2">Ahead on the radar</div>
+              <div className="section-subtitle mt-2">{t("stats.aheadOnRadar")}</div>
             </div>
           </section>
 
           <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="panel-card space-y-4">
               <div>
-                <h2 className="section-title">Applications by stage</h2>
+                <h2 className="section-title">{t("stats.byStage")}</h2>
                 <p className="section-subtitle">
-                  See where your search is concentrating right now.
+                  {t("stats.byStageHelp")}
                 </p>
               </div>
 
               {Object.keys(stats.stageCounts).length === 0 ? (
-                <div className="empty-state">No applications yet.</div>
+                <div className="empty-state">{t("stats.noApplications")}</div>
               ) : (
                 <ul className="space-y-3">
                   {Object.entries(stats.stageCounts).map(([stage, count]) => (
                     <li key={stage} className="space-y-1.5">
                       <div className="flex items-center justify-between gap-3">
-                        <span className={`badge badge-${stage}`}>{stage}</span>
+                        <span className={`badge badge-${stage}`}>{tValue("stage", stage)}</span>
                         <span className="font-display text-2xl">{count}</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-[color:var(--paper-sunk)]">
@@ -153,24 +157,24 @@ export default function StatsPage() {
 
             <div className="panel-card space-y-4">
               <div>
-                <h2 className="section-title">Follow-up health</h2>
+                <h2 className="section-title">{t("stats.followUpHealth")}</h2>
                 <p className="section-subtitle">
-                  Keep overdue tasks low and future follow-ups intentional.
+                  {t("stats.followUpHealthHelp")}
                 </p>
               </div>
 
               <div className="list-card">
-                <div className="mini-stat-label">Overdue</div>
+                <div className="mini-stat-label">{t("stats.overdue")}</div>
                 <div className="mini-stat-value">{stats.followUps.overdue}</div>
               </div>
 
               <div className="list-card">
-                <div className="mini-stat-label">Upcoming</div>
+                <div className="mini-stat-label">{t("stats.upcoming")}</div>
                 <div className="mini-stat-value">{stats.followUps.upcoming}</div>
               </div>
 
               <div className="list-card">
-                <div className="mini-stat-label">Sent</div>
+                <div className="mini-stat-label">{t("stats.sent")}</div>
                 <div className="mini-stat-value">{stats.followUps.sent}</div>
               </div>
             </div>
@@ -178,42 +182,43 @@ export default function StatsPage() {
 
           <section className="panel-card space-y-4">
             <div>
-              <h2 className="section-title">Assistant drafts</h2>
+              <h2 className="section-title">{t("stats.drafts")}</h2>
               <p className="section-subtitle">
-                Generated follow-ups and answers, and how many passed your review.
+                {t("stats.draftsHelp")}
               </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="list-card">
-                <div className="mini-stat-label">Generated</div>
+                <div className="mini-stat-label">{t("stats.generated")}</div>
                 <div className="mini-stat-value">{draftTotal}</div>
               </div>
               <div className="list-card">
-                <div className="mini-stat-label">Awaiting review</div>
+                <div className="mini-stat-label">{t("stats.awaitingReview")}</div>
                 <div className="mini-stat-value">{stats.drafts.pending_review ?? 0}</div>
               </div>
               <div className="list-card">
-                <div className="mini-stat-label">Approved</div>
+                <div className="mini-stat-label">{t("stats.approved")}</div>
                 <div className="mini-stat-value">{stats.drafts.approved ?? 0}</div>
               </div>
               <div className="list-card">
-                <div className="mini-stat-label">Rejected</div>
+                <div className="mini-stat-label">{t("stats.rejected")}</div>
                 <div className="mini-stat-value">{stats.drafts.rejected ?? 0}</div>
               </div>
             </div>
 
             {reviewedTotal > 0 ? (
               <div className="section-subtitle">
-                {Math.round(((stats.drafts.approved ?? 0) / reviewedTotal) * 100)}% of reviewed
-                drafts were approved.
+                {t("stats.approvalRate", {
+                  percent: Math.round(((stats.drafts.approved ?? 0) / reviewedTotal) * 100),
+                })}
               </div>
             ) : null}
           </section>
         </>
       ) : (
         <section className="panel-card">
-          <div className="empty-state">No stats available.</div>
+          <div className="empty-state">{t("stats.none")}</div>
         </section>
       )}
     </PageFrame>

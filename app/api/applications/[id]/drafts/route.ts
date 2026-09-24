@@ -7,6 +7,7 @@ import { DRAFT_KINDS, type DraftKind, serializeDraft } from "@/lib/drafts";
 import { localYYYYMMDD } from "@/lib/localDate";
 import {
   answerWithRetrievedContext,
+  type DraftLanguage,
   draftFollowUpMessage,
   getResponseModel,
 } from "@/lib/rag";
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
   }
 
   const instructions = String(body.instructions ?? "").trim();
+  const language: DraftLanguage = body.language === "es" ? "es" : "en";
 
   try {
     if (kind === "qa_answer") {
@@ -72,12 +74,14 @@ export async function POST(req: Request) {
       const matches = await retrieveContext(id, question);
       const content = await answerWithRetrievedContext(
         `Application: ${application.company} | ${application.role}\n${question}`,
-        matches.map((match) => ({ label: matchLabel(match), text: match.content }))
+        matches.map((match) => ({ label: matchLabel(match), text: match.content })),
+        language
       );
 
       const draft = await prisma.generatedDraft.create({
         data: {
           applicationId: id,
+          language,
           kind,
           prompt: question,
           content,
@@ -141,13 +145,15 @@ export async function POST(req: Request) {
     const content = await draftFollowUpMessage(
       details,
       channel,
-      matches.map((match) => ({ label: matchLabel(match), text: match.content }))
+      matches.map((match) => ({ label: matchLabel(match), text: match.content })),
+      language
     );
 
     const draft = await prisma.generatedDraft.create({
       data: {
         applicationId: id,
         recruiterId: recruiter?.id ?? null,
+        language,
         kind,
         prompt: details,
         content,

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { PageFrame } from "@/components/PageFrame";
 
 type Application = {
@@ -28,6 +29,7 @@ function stageBadgeClass(stage: string) {
 }
 
 export default function ApplicationsPage() {
+  const { t, tValue } = useI18n();
   const [items, setItems] = useState<Application[]>([]);
   const [stage, setStage] = useState<string>("");
   const [q, setQ] = useState("");
@@ -79,14 +81,14 @@ export default function ApplicationsPage() {
 
   return (
     <PageFrame
-      eyebrow="Pipeline"
-      title="Every application"
-      subtitle="Search by company or role and filter by stage."
+      eyebrow={t("pipeline.eyebrow")}
+      title={t("pipeline.title")}
+      subtitle={t("pipeline.subtitle")}
       actions={
         <>
-          {loading ? <div className="badge badge-neutral">Searching...</div> : null}
+          {loading ? <div className="badge badge-neutral">{t("common.searching")}</div> : null}
           <Link href="/api/export/applications" className="app-button">
-            Export CSV
+            {t("pipeline.exportCsv")}
           </Link>
         </>
       }
@@ -95,20 +97,20 @@ export default function ApplicationsPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
             <label className="field-label" htmlFor="search">
-              Search
+              {t("pipeline.search")}
             </label>
             <input
               id="search"
               className="field-input"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Company or role"
+              placeholder={t("pipeline.searchPlaceholder")}
             />
           </div>
 
           <div className="min-w-[190px]">
             <label className="field-label" htmlFor="stage">
-              Stage
+              {t("common.stage")}
             </label>
             <select
               id="stage"
@@ -116,16 +118,17 @@ export default function ApplicationsPage() {
               value={stage}
               onChange={(e) => setStage(e.target.value)}
             >
-              <option value="">All</option>
-              <option value="applied">applied</option>
-              <option value="interview">interview</option>
-              <option value="rejected">rejected</option>
-              <option value="offer">offer</option>
+              <option value="">{t("pipeline.all")}</option>
+              {["applied", "interview", "rejected", "offer"].map((value) => (
+                <option key={value} value={value}>
+                  {tValue("stage", value)}
+                </option>
+              ))}
             </select>
           </div>
 
           <div className="mini-stat min-w-[180px]">
-            <div className="mini-stat-label">Visible</div>
+            <div className="mini-stat-label">{t("pipeline.visible")}</div>
             <div className="mini-stat-value">{items.length}</div>
           </div>
         </div>
@@ -134,7 +137,7 @@ export default function ApplicationsPage() {
       {items.length === 0 ? (
         <section className="panel-card">
           <div className="empty-state">
-            {hasFilters ? "No results matched those filters." : "No applications yet."}
+            {hasFilters ? t("pipeline.noResults") : t("pipeline.noApplications")}
           </div>
         </section>
       ) : (
@@ -143,8 +146,10 @@ export default function ApplicationsPage() {
             <section key={group} className="panel-card space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className={stageBadgeClass(group)}>{group}</span>
-                  <div className="section-subtitle">{list.length} tracked</div>
+                  <span className={stageBadgeClass(group)}>{tValue("stage", group)}</span>
+                  <div className="section-subtitle">
+                    {t("pipeline.tracked", { count: list.length })}
+                  </div>
                 </div>
               </div>
 
@@ -159,14 +164,14 @@ export default function ApplicationsPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <span className={stageBadgeClass(application.stage)}>
-                            {application.stage}
+                            {tValue("stage", application.stage)}
                           </span>
                           <span className="badge badge-neutral">
-                            Applied {application.dateApplied}
+                            {t("pipeline.applied", { date: application.dateApplied })}
                           </span>
                           {application.nextFollowUpDate ? (
                             <span className="badge badge-neutral">
-                              Follow up {application.nextFollowUpDate}
+                              {t("pipeline.followUp", { date: application.nextFollowUpDate })}
                             </span>
                           ) : null}
                         </div>
@@ -176,7 +181,7 @@ export default function ApplicationsPage() {
                         href={`/applications/${application.id}`}
                         className="app-button-secondary"
                       >
-                        Edit
+                        {t("common.edit")}
                       </Link>
                     </div>
                   </li>

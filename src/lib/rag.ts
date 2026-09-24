@@ -174,6 +174,15 @@ function stripThinking(value: string) {
   return value.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
+export type DraftLanguage = "en" | "es";
+
+// English needs no instruction; the prompts are already in English.
+function languageInstruction(language: DraftLanguage) {
+  return language === "es"
+    ? " Write the entire response in Spanish, even though the context may be in English."
+    : "";
+}
+
 type ContextBlock = {
   label: string;
   text: string;
@@ -204,10 +213,12 @@ export async function generateText(systemPrompt: string, userPrompt: string) {
 
 export async function answerWithRetrievedContext(
   question: string,
-  contextBlocks: ContextBlock[]
+  contextBlocks: ContextBlock[],
+  language: DraftLanguage = "en"
 ) {
   const systemPrompt =
-    "You answer questions about a saved job application using only the supplied context. Be precise, keep claims grounded in the sources, and say when the context is incomplete. When you use a source, cite it inline like [1] or [2].";
+    "You answer questions about a saved job application using only the supplied context. Be precise, keep claims grounded in the sources, and say when the context is incomplete. When you use a source, cite it inline like [1] or [2]." +
+    languageInstruction(language);
 
   return generateText(
     systemPrompt,
@@ -218,7 +229,8 @@ export async function answerWithRetrievedContext(
 export async function draftFollowUpMessage(
   details: string,
   channel: string,
-  contextBlocks: ContextBlock[]
+  contextBlocks: ContextBlock[],
+  language: DraftLanguage = "en"
 ) {
   // Describe only the requested format; listing both makes small models write both.
   const format =
@@ -231,10 +243,14 @@ export async function draftFollowUpMessage(
     "Use only facts from the application details and context. Never invent names, dates, interviews, or accomplishments; if something is unknown, leave it out.",
     "Keep it warm and specific to the role.",
     format,
-    "Greet the recipient by first name if one is given; otherwise open with 'Hello,'.",
-    "Sign off with the applicant's name if it is given; otherwise end with 'Best,' and no name.",
+    language === "es"
+      ? "Greet the recipient by first name if one is given; otherwise open with 'Hola,'."
+      : "Greet the recipient by first name if one is given; otherwise open with 'Hello,'.",
+    language === "es"
+      ? "End with 'Saludos,' followed by the applicant's name if it is given, otherwise no name."
+      : "Sign off with the applicant's name if it is given; otherwise end with 'Best,' and no name.",
     "Do not include citation markers, bracketed placeholders, alternative versions, or commentary about the draft.",
-  ].join(" ");
+  ].join(" ") + languageInstruction(language);
 
   const text = await generateText(
     systemPrompt,

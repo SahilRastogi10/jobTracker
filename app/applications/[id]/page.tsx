@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationAssistant } from "@/components/ApplicationAssistant";
+import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { PageFrame } from "@/components/PageFrame";
 
 type Application = {
@@ -139,22 +141,15 @@ function formatSourceLabel(url: string | undefined, fallback: string) {
   return host ?? fallback;
 }
 
-function emailRelevanceLabel(score: number) {
-  if (score >= 10) return "Strong match";
-  if (score >= 6) return "Recruiting lead";
-  if (score >= 3) return "Possible lead";
-  return "Company email";
-}
-
-function formatSourceType(sourceType: string) {
-  return sourceType
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function emailRelevanceKey(score: number): MessageKey {
+  if (score >= 10) return "detail.relevanceStrong";
+  if (score >= 6) return "detail.relevanceRecruiting";
+  if (score >= 3) return "detail.relevancePossible";
+  return "detail.relevanceCompany";
 }
 
 export default function ApplicationDetailPage() {
+  const { t, tValue, dateLocale } = useI18n();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id;
@@ -211,7 +206,7 @@ export default function ApplicationDetailPage() {
         throw new Error(
           typeof data?.error === "string"
             ? data.error
-            : "Could not load application context."
+            : t("detail.errLoadContext")
         );
       }
 
@@ -221,7 +216,7 @@ export default function ApplicationDetailPage() {
       setContextError(
         error instanceof Error
           ? error.message
-          : "Could not load application context."
+          : t("detail.errLoadContext")
       );
     } finally {
       setContextLoading(false);
@@ -234,6 +229,8 @@ export default function ApplicationDetailPage() {
     void loadRecruiters(id);
     void loadFollowUps(id);
     void loadContextStatus(id);
+    // Reload only when the application changes, not when the language does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function save(patch: Partial<Application>) {
@@ -253,7 +250,7 @@ export default function ApplicationDetailPage() {
 
   async function remove() {
     if (!item) return;
-    if (!confirm("Delete this application?")) return;
+    if (!confirm(t("detail.confirmDeleteApplication"))) return;
     await fetch(`/api/applications/${item.id}`, { method: "DELETE" });
     router.push("/applications");
   }
@@ -293,7 +290,7 @@ export default function ApplicationDetailPage() {
     setSaving(false);
     const data = await res.json();
     if (!res.ok) {
-      alert(typeof data?.error === "string" ? data.error : "Could not save follow-up.");
+      alert(typeof data?.error === "string" ? data.error : t("detail.errSaveFollowUp"));
       if (item) void loadFollowUps(item.id);
       return;
     }
@@ -301,7 +298,7 @@ export default function ApplicationDetailPage() {
   }
 
   async function deleteFollowUp(followUpId: string) {
-    if (!confirm("Delete this follow-up and its reminders?")) return;
+    if (!confirm(t("detail.confirmDeleteFollowUp"))) return;
     const res = await fetch(`/api/followups/${followUpId}`, { method: "DELETE" });
     if (!res.ok) return;
     setFollowUps((current) => current.filter((followUp) => followUp.id !== followUpId));
@@ -329,7 +326,7 @@ export default function ApplicationDetailPage() {
       body: JSON.stringify({
         date: followUp.dueDate,
         time: "09:00",
-        message: `Follow up: ${item.company} | ${item.role}`,
+        message: t("today.followUpReminder", { company: item.company, role: item.role }),
         followUpId: followUp.id,
       }),
     });
@@ -359,14 +356,14 @@ export default function ApplicationDetailPage() {
 
       if (!res.ok) {
         throw new Error(
-          typeof data?.error === "string" ? data.error : "Search failed."
+          typeof data?.error === "string" ? data.error : t("detail.searchFailed")
         );
       }
 
       setResearchResults(data);
     } catch (error) {
       setResearchError(
-        error instanceof Error ? error.message : "Could not run contact research."
+        error instanceof Error ? error.message : t("detail.errResearch")
       );
     } finally {
       setResearchLoading(false);
@@ -410,7 +407,7 @@ export default function ApplicationDetailPage() {
   }
 
   async function deleteRecruiter(recruiterId: string) {
-    if (!confirm("Delete this recruiter?")) return;
+    if (!confirm(t("detail.confirmDeleteRecruiter"))) return;
     const res = await fetch(`/api/recruiters/${recruiterId}`, { method: "DELETE" });
     if (!res.ok) return;
     setRecruiters((current) => current.filter((recruiter) => recruiter.id !== recruiterId));
@@ -452,7 +449,7 @@ export default function ApplicationDetailPage() {
         throw new Error(
           typeof data?.error === "string"
             ? data.error
-            : "Could not sync application context."
+            : t("detail.errSyncContext")
         );
       }
 
@@ -462,7 +459,7 @@ export default function ApplicationDetailPage() {
       setContextError(
         error instanceof Error
           ? error.message
-          : "Could not sync application context."
+          : t("detail.errSyncContext")
       );
     } finally {
       setContextSyncing(false);
@@ -472,11 +469,11 @@ export default function ApplicationDetailPage() {
   if (!id) {
     return (
       <PageFrame
-        title="Loading application"
-        subtitle="Pulling application details into the editor."
+        title={t("detail.loadingTitle")}
+        subtitle={t("detail.loadingSubtitle")}
       >
         <section className="panel-card">
-          <div className="empty-state">Loading...</div>
+          <div className="empty-state">{t("common.loading")}</div>
         </section>
       </PageFrame>
     );
@@ -485,16 +482,16 @@ export default function ApplicationDetailPage() {
   if (!item) {
     return (
       <PageFrame
-        title="Application not found"
-        subtitle="The record could not be loaded."
+        title={t("detail.notFoundTitle")}
+        subtitle={t("detail.notFoundSubtitle")}
         actions={
           <Link href="/applications" className="app-button-secondary">
-            Back to Applications
+            {t("detail.backToApplications")}
           </Link>
         }
       >
         <section className="panel-card">
-          <div className="empty-state">Loading...</div>
+          <div className="empty-state">{t("common.loading")}</div>
         </section>
       </PageFrame>
     );
@@ -521,12 +518,12 @@ export default function ApplicationDetailPage() {
     <PageFrame
       eyebrow={item.role}
       title={item.company}
-      subtitle={`Applied ${item.dateApplied}. Edits save as you go.`}
+      subtitle={t("detail.subtitle", { date: item.dateApplied })}
       actions={
         <>
-          <span className={stageBadgeClass(item.stage)}>{item.stage}</span>
+          <span className={stageBadgeClass(item.stage)}>{tValue("stage", item.stage)}</span>
           <Link href="/applications" className="app-button-secondary">
-            Back
+            {t("common.back")}
           </Link>
         </>
       }
@@ -535,7 +532,7 @@ export default function ApplicationDetailPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="field-label" htmlFor="company">
-              Company
+              {t("common.company")}
             </label>
             <input
               id="company"
@@ -548,7 +545,7 @@ export default function ApplicationDetailPage() {
 
           <div>
             <label className="field-label" htmlFor="role">
-              Role
+              {t("common.role")}
             </label>
             <input
               id="role"
@@ -561,7 +558,7 @@ export default function ApplicationDetailPage() {
 
           <div>
             <label className="field-label" htmlFor="link">
-              Job Link
+              {t("detail.jobLink")}
             </label>
             <input
               id="link"
@@ -575,7 +572,7 @@ export default function ApplicationDetailPage() {
 
           <div>
             <label className="field-label" htmlFor="stage">
-              Stage
+              {t("common.stage")}
             </label>
             <select
               id="stage"
@@ -587,16 +584,17 @@ export default function ApplicationDetailPage() {
                 void save({ stage: value });
               }}
             >
-              <option value="applied">applied</option>
-              <option value="interview">interview</option>
-              <option value="rejected">rejected</option>
-              <option value="offer">offer</option>
+              {["applied", "interview", "rejected", "offer"].map((value) => (
+                <option key={value} value={value}>
+                  {tValue("stage", value)}
+                </option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className="field-label" htmlFor="date-applied">
-              Applied Date
+              {t("detail.appliedDate")}
             </label>
             <input
               id="date-applied"
@@ -613,25 +611,25 @@ export default function ApplicationDetailPage() {
         <div className="list-card space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="section-title">Follow-ups</div>
+              <div className="section-title">{t("detail.followUps")}</div>
               <p className="section-subtitle">
-                Plan each touchpoint, pick who it goes to, and mark it sent once it is out. New follow-ups default to seven days after the last one.
+                {t("detail.followUpsHelp")}
               </p>
             </div>
             <button className="app-button" onClick={addFollowUp}>
-              Add follow-up
+              {t("detail.addFollowUp")}
             </button>
           </div>
 
           {followUps.length === 0 ? (
-            <div className="empty-state">No follow-ups planned yet.</div>
+            <div className="empty-state">{t("detail.noFollowUps")}</div>
           ) : (
             followUps.map((followUp) => (
               <div key={followUp.id} className="panel-card space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <div>
                     <label className="field-label" htmlFor={`follow-up-date-${followUp.id}`}>
-                      Due date
+                      {t("detail.dueDate")}
                     </label>
                     <input
                       id={`follow-up-date-${followUp.id}`}
@@ -645,7 +643,7 @@ export default function ApplicationDetailPage() {
 
                   <div>
                     <label className="field-label" htmlFor={`follow-up-channel-${followUp.id}`}>
-                      Channel
+                      {t("detail.channel")}
                     </label>
                     <select
                       id={`follow-up-channel-${followUp.id}`}
@@ -658,7 +656,7 @@ export default function ApplicationDetailPage() {
                     >
                       {FOLLOW_UP_CHANNELS.map((channel) => (
                         <option key={channel} value={channel}>
-                          {channel}
+                          {tValue("channel", channel)}
                         </option>
                       ))}
                     </select>
@@ -666,7 +664,7 @@ export default function ApplicationDetailPage() {
 
                   <div>
                     <label className="field-label" htmlFor={`follow-up-recruiter-${followUp.id}`}>
-                      Recruiter
+                      {t("detail.recruiter")}
                     </label>
                     <select
                       id={`follow-up-recruiter-${followUp.id}`}
@@ -678,10 +676,10 @@ export default function ApplicationDetailPage() {
                         void saveFollowUp(followUp.id, { recruiterId });
                       }}
                     >
-                      <option value="">No recruiter</option>
+                      <option value="">{t("detail.noRecruiter")}</option>
                       {recruiters.map((recruiter, index) => (
                         <option key={recruiter.id} value={recruiter.id}>
-                          {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                          {recruiter.name || recruiter.email || t("detail.recruiterN", { n: index + 1 })}
                         </option>
                       ))}
                     </select>
@@ -689,7 +687,7 @@ export default function ApplicationDetailPage() {
 
                   <div>
                     <label className="field-label" htmlFor={`follow-up-status-${followUp.id}`}>
-                      Status
+                      {t("detail.status")}
                     </label>
                     <select
                       id={`follow-up-status-${followUp.id}`}
@@ -702,7 +700,7 @@ export default function ApplicationDetailPage() {
                     >
                       {FOLLOW_UP_STATUSES.map((status) => (
                         <option key={status} value={status}>
-                          {status}
+                          {tValue("followUpStatus", status)}
                         </option>
                       ))}
                     </select>
@@ -711,7 +709,7 @@ export default function ApplicationDetailPage() {
 
                 <div>
                   <label className="field-label" htmlFor={`follow-up-notes-${followUp.id}`}>
-                    Notes
+                    {t("common.notes")}
                   </label>
                   <textarea
                     id={`follow-up-notes-${followUp.id}`}
@@ -719,7 +717,7 @@ export default function ApplicationDetailPage() {
                     value={followUp.notes ?? ""}
                     onChange={(e) => editFollowUpLocal(followUp.id, { notes: e.target.value })}
                     onBlur={() => saveFollowUp(followUp.id, { notes: followUp.notes ?? "" })}
-                    placeholder="What to mention, what you already sent, etc."
+                    placeholder={t("detail.followUpNotesPlaceholder")}
                   />
                 </div>
 
@@ -735,31 +733,33 @@ export default function ApplicationDetailPage() {
                           }
                         >
                           {followUp.draft.status === "approved"
-                            ? "Approved draft attached"
-                            : "Attached draft needs review"}
+                            ? t("detail.approvedDraftAttached")
+                            : t("detail.draftNeedsReview")}
                         </span>
                         <button
                           className="app-button-ghost"
                           onClick={() => void detachDraft(followUp.id)}
                         >
-                          Detach draft
+                          {t("detail.detachDraft")}
                         </button>
                       </>
                     ) : null}
                     {followUp.status === "sent" && followUp.sentAt ? (
                       <span className="badge badge-offer">
-                        Sent {new Date(followUp.sentAt).toLocaleDateString()}
+                        {t("detail.sentOn", {
+                          date: new Date(followUp.sentAt).toLocaleDateString(dateLocale),
+                        })}
                       </span>
                     ) : null}
                     {followUp.hasReminder ? (
-                      <span className="badge badge-neutral">Reminder set</span>
+                      <span className="badge badge-neutral">{t("detail.reminderSet")}</span>
                     ) : (
                       <button
                         className="app-button-secondary"
                         onClick={() => createFollowUpReminder(followUp)}
                         disabled={followUpBusyId === followUp.id}
                       >
-                        {followUpBusyId === followUp.id ? "Creating..." : "Create reminder"}
+                        {followUpBusyId === followUp.id ? t("common.creating") : t("detail.createReminder")}
                       </button>
                     )}
                   </div>
@@ -767,7 +767,7 @@ export default function ApplicationDetailPage() {
                     className="app-button-ghost"
                     onClick={() => void deleteFollowUp(followUp.id)}
                   >
-                    Delete
+                    {t("common.delete")}
                   </button>
                 </div>
               </div>
@@ -777,9 +777,9 @@ export default function ApplicationDetailPage() {
 
         <div className="list-card space-y-4">
           <div className="space-y-2">
-            <div className="section-title">Contact research</div>
+            <div className="section-title">{t("detail.contactResearch")}</div>
             <p className="section-subtitle">
-              Prioritize recruiter and talent-team emails first, then use profiles and company pages as supporting context. Long result lists stay inside scrollable panels so this page stays usable.
+              {t("detail.contactResearchHelp")}
             </p>
           </div>
 
@@ -790,7 +790,7 @@ export default function ApplicationDetailPage() {
                 onClick={runContactResearch}
                 disabled={researchLoading}
               >
-                {researchLoading ? "Searching..." : "Find recruiter emails"}
+                {researchLoading ? t("common.searching") : t("detail.findEmails")}
               </button>
               {researchResults ? (
                 <div className="badge badge-neutral">{researchResults.provider}</div>
@@ -800,25 +800,25 @@ export default function ApplicationDetailPage() {
             {researchResults ? (
               <div className="grid gap-3 sm:grid-cols-4">
                 <div className="mini-stat">
-                  <div className="mini-stat-label">Recruiter Emails</div>
+                  <div className="mini-stat-label">{t("detail.recruiterEmails")}</div>
                   <div className="mini-stat-value">
                     {researchResults.recruiterEmails.length}
                   </div>
                 </div>
                 <div className="mini-stat">
-                  <div className="mini-stat-label">Other Emails</div>
+                  <div className="mini-stat-label">{t("detail.otherEmails")}</div>
                   <div className="mini-stat-value">
                     {researchResults.otherEmails.length}
                   </div>
                 </div>
                 <div className="mini-stat">
-                  <div className="mini-stat-label">Profiles</div>
+                  <div className="mini-stat-label">{t("detail.profiles")}</div>
                   <div className="mini-stat-value">
                     {researchResults.profiles.length}
                   </div>
                 </div>
                 <div className="mini-stat">
-                  <div className="mini-stat-label">Pages</div>
+                  <div className="mini-stat-label">{t("detail.pages")}</div>
                   <div className="mini-stat-value">
                     {researchResults.companyPages.length}
                   </div>
@@ -831,16 +831,16 @@ export default function ApplicationDetailPage() {
 
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             <a className="app-button-secondary" href={peopleSearchUrl} target="_blank" rel="noreferrer">
-              Search recruiter + role
+              {t("detail.searchRecruiterRole")}
             </a>
             <a className="app-button-secondary" href={talentSearchUrl} target="_blank" rel="noreferrer">
-              Search talent acquisition
+              {t("detail.searchTalent")}
             </a>
             <a className="app-button-secondary" href={linkedinSearchUrl} target="_blank" rel="noreferrer">
-              Search LinkedIn profiles
+              {t("detail.searchLinkedIn")}
             </a>
             <a className="app-button-secondary" href={careersSearchUrl} target="_blank" rel="noreferrer">
-              Search careers contact
+              {t("detail.searchCareers")}
             </a>
             {companySiteSearchUrl ? (
               <a
@@ -849,7 +849,7 @@ export default function ApplicationDetailPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Search company site
+                {t("detail.searchCompanySite")}
               </a>
             ) : null}
             {host ? (
@@ -859,7 +859,7 @@ export default function ApplicationDetailPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Open {host}
+                {t("detail.openHost", { host })}
               </a>
             ) : null}
           </div>
@@ -867,13 +867,15 @@ export default function ApplicationDetailPage() {
           <div className="list-card space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="section-title">Save research to</div>
+                <div className="section-title">{t("detail.saveResearchTo")}</div>
                 <p className="section-subtitle">
-                  Emails, profiles, and sources you save from the results below go to this recruiter.
+                  {t("detail.saveResearchHelp")}
                 </p>
               </div>
               <div className="badge badge-neutral">
-                {recruiters.length} {recruiters.length === 1 ? "recruiter" : "recruiters"}
+                {recruiters.length === 1
+                  ? t("detail.recruiterCountOne")
+                  : t("detail.recruiterCountMany", { count: recruiters.length })}
               </div>
             </div>
 
@@ -882,10 +884,10 @@ export default function ApplicationDetailPage() {
               value={saveTarget}
               onChange={(e) => setSaveTarget(e.target.value)}
             >
-              <option value="new">New recruiter</option>
+              <option value="new">{t("detail.newRecruiter")}</option>
               {recruiters.map((recruiter, index) => (
                 <option key={recruiter.id} value={recruiter.id}>
-                  {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                  {recruiter.name || recruiter.email || t("detail.recruiterN", { n: index + 1 })}
                 </option>
               ))}
             </select>
@@ -897,19 +899,19 @@ export default function ApplicationDetailPage() {
                 <div className="panel-card space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="section-title">Recruiter email candidates</div>
+                      <div className="section-title">{t("detail.emailCandidates")}</div>
                       <p className="section-subtitle">
-                        These are the strongest email matches from recruiting, talent, hiring, and careers-related public snippets.
+                        {t("detail.emailCandidatesHelp")}
                       </p>
                     </div>
                     <div className="badge badge-neutral">
-                      {researchResults.recruiterEmails.length} matches
+                      {t("detail.matches", { count: researchResults.recruiterEmails.length })}
                     </div>
                   </div>
 
                   {researchResults.recruiterEmails.length === 0 ? (
                     <div className="empty-state">
-                      No recruiter-specific emails surfaced yet. Try the external searches or open the company site.
+                      {t("detail.noRecruiterEmails")}
                     </div>
                   ) : (
                     <div className="scroll-panel space-y-3">
@@ -923,7 +925,7 @@ export default function ApplicationDetailPage() {
                               <div className="font-semibold">{mention.email}</div>
                               <div className="mt-1">
                                 <span className="badge badge-neutral">
-                                  {emailRelevanceLabel(mention.relevance)}
+                                  {t(emailRelevanceKey(mention.relevance))}
                                 </span>
                               </div>
                             </div>
@@ -936,7 +938,7 @@ export default function ApplicationDetailPage() {
                                 })
                               }
                             >
-                              Save email
+                              {t("detail.saveEmail")}
                             </button>
                           </div>
 
@@ -952,7 +954,7 @@ export default function ApplicationDetailPage() {
                               {mention.sourceTitle}
                             </a>
                             <div className="section-subtitle">
-                              {formatSourceLabel(mention.sourceUrl, "Public source")}
+                              {formatSourceLabel(mention.sourceUrl, t("detail.publicSource"))}
                             </div>
                           </div>
                         </div>
@@ -964,19 +966,19 @@ export default function ApplicationDetailPage() {
                 <div className="panel-card space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="section-title">Other company emails</div>
+                      <div className="section-title">{t("detail.otherCompanyEmails")}</div>
                       <p className="section-subtitle">
-                        Broader company addresses can still be useful if you need a fallback contact or a verified source page.
+                        {t("detail.otherEmailsHelp")}
                       </p>
                     </div>
                     <div className="badge badge-neutral">
-                      {researchResults.otherEmails.length} matches
+                      {t("detail.matches", { count: researchResults.otherEmails.length })}
                     </div>
                   </div>
 
                   {researchResults.otherEmails.length === 0 ? (
                     <div className="empty-state">
-                      No broader company email mentions were found in the returned snippets.
+                      {t("detail.noOtherEmails")}
                     </div>
                   ) : (
                     <div className="scroll-panel space-y-3">
@@ -990,7 +992,7 @@ export default function ApplicationDetailPage() {
                               <div className="font-semibold">{mention.email}</div>
                               <div className="mt-1">
                                 <span className="badge badge-neutral">
-                                  {emailRelevanceLabel(mention.relevance)}
+                                  {t(emailRelevanceKey(mention.relevance))}
                                 </span>
                               </div>
                             </div>
@@ -1003,7 +1005,7 @@ export default function ApplicationDetailPage() {
                                 })
                               }
                             >
-                              Save fallback
+                              {t("detail.saveFallback")}
                             </button>
                           </div>
 
@@ -1028,18 +1030,18 @@ export default function ApplicationDetailPage() {
                 <div className="panel-card space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="section-title">Profiles</div>
+                      <div className="section-title">{t("detail.profiles")}</div>
                       <p className="section-subtitle">
-                        Public LinkedIn-style profiles that may help you identify the right recruiter or sourcer.
+                        {t("detail.profilesHelp")}
                       </p>
                     </div>
                     <div className="badge badge-neutral">
-                      {researchResults.profiles.length} profiles
+                      {t("detail.profilesCount", { count: researchResults.profiles.length })}
                     </div>
                   </div>
 
                   {researchResults.profiles.length === 0 ? (
-                    <div className="empty-state">No public profiles found yet.</div>
+                    <div className="empty-state">{t("detail.noProfiles")}</div>
                   ) : (
                     <div className="scroll-panel space-y-3">
                       {researchResults.profiles.map((result) => (
@@ -1055,7 +1057,7 @@ export default function ApplicationDetailPage() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Open source
+                              {t("common.openSource")}
                             </a>
                             <button
                               className="app-button-secondary"
@@ -1066,7 +1068,7 @@ export default function ApplicationDetailPage() {
                                 })
                               }
                             >
-                              Save profile
+                              {t("detail.saveProfile")}
                             </button>
                           </div>
                         </div>
@@ -1078,18 +1080,18 @@ export default function ApplicationDetailPage() {
                 <div className="panel-card space-y-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="section-title">Company pages</div>
+                      <div className="section-title">{t("detail.companyPages")}</div>
                       <p className="section-subtitle">
-                        Careers pages and recruiting hubs are useful for confirming whether an email or contact path looks legitimate.
+                        {t("detail.companyPagesHelp")}
                       </p>
                     </div>
                     <div className="badge badge-neutral">
-                      {researchResults.companyPages.length} pages
+                      {t("detail.pagesCount", { count: researchResults.companyPages.length })}
                     </div>
                   </div>
 
                   {researchResults.companyPages.length === 0 ? (
-                    <div className="empty-state">No company pages found yet.</div>
+                    <div className="empty-state">{t("detail.noPages")}</div>
                   ) : (
                     <div className="scroll-panel space-y-3">
                       {researchResults.companyPages.map((result) => (
@@ -1105,7 +1107,7 @@ export default function ApplicationDetailPage() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Open source
+                              {t("common.openSource")}
                             </a>
                             <button
                               className="app-button-secondary"
@@ -1115,7 +1117,7 @@ export default function ApplicationDetailPage() {
                                 })
                               }
                             >
-                              Save source
+                              {t("detail.saveSource")}
                             </button>
                           </div>
                         </div>
@@ -1130,39 +1132,39 @@ export default function ApplicationDetailPage() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="section-title">Recruiters</div>
+                <div className="section-title">{t("detail.recruiters")}</div>
                 <p className="section-subtitle">
-                  Keep every contact you find for this application so you can reuse them for follow-ups and outreach.
+                  {t("detail.recruitersHelp")}
                 </p>
               </div>
               <button className="app-button-secondary" onClick={() => void createRecruiter()}>
-                Add recruiter
+                {t("detail.addRecruiter")}
               </button>
             </div>
 
             {recruiters.length === 0 ? (
               <div className="empty-state">
-                No recruiters saved yet. Add one manually or save a result from contact research.
+                {t("detail.noRecruiters")}
               </div>
             ) : (
               recruiters.map((recruiter, index) => (
                 <div key={recruiter.id} className="panel-card space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="section-title">
-                      {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                      {recruiter.name || recruiter.email || t("detail.recruiterN", { n: index + 1 })}
                     </div>
                     <button
                       className="app-button-ghost"
                       onClick={() => void deleteRecruiter(recruiter.id)}
                     >
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <label className="field-label" htmlFor={`recruiter-name-${recruiter.id}`}>
-                        Name
+                        {t("detail.name")}
                       </label>
                       <input
                         id={`recruiter-name-${recruiter.id}`}
@@ -1176,7 +1178,7 @@ export default function ApplicationDetailPage() {
 
                     <div>
                       <label className="field-label" htmlFor={`recruiter-title-${recruiter.id}`}>
-                        Title
+                        {t("detail.title")}
                       </label>
                       <input
                         id={`recruiter-title-${recruiter.id}`}
@@ -1184,13 +1186,13 @@ export default function ApplicationDetailPage() {
                         value={recruiter.title ?? ""}
                         onChange={(e) => editRecruiterLocal(recruiter.id, { title: e.target.value })}
                         onBlur={() => saveRecruiter(recruiter.id, { title: recruiter.title ?? "" })}
-                        placeholder="Senior Technical Recruiter"
+                        placeholder={t("detail.titlePlaceholder")}
                       />
                     </div>
 
                     <div>
                       <label className="field-label" htmlFor={`recruiter-email-${recruiter.id}`}>
-                        Email
+                        {t("detail.email")}
                       </label>
                       <input
                         id={`recruiter-email-${recruiter.id}`}
@@ -1205,7 +1207,7 @@ export default function ApplicationDetailPage() {
 
                     <div>
                       <label className="field-label" htmlFor={`recruiter-linkedin-${recruiter.id}`}>
-                        LinkedIn or public profile
+                        {t("detail.linkedIn")}
                       </label>
                       <input
                         id={`recruiter-linkedin-${recruiter.id}`}
@@ -1220,7 +1222,7 @@ export default function ApplicationDetailPage() {
 
                   <div>
                     <label className="field-label" htmlFor={`recruiter-source-${recruiter.id}`}>
-                      Source notes
+                      {t("detail.sourceNotes")}
                     </label>
                     <textarea
                       id={`recruiter-source-${recruiter.id}`}
@@ -1228,7 +1230,7 @@ export default function ApplicationDetailPage() {
                       value={recruiter.source ?? ""}
                       onChange={(e) => editRecruiterLocal(recruiter.id, { source: e.target.value })}
                       onBlur={() => saveRecruiter(recruiter.id, { source: recruiter.source ?? "" })}
-                      placeholder="Where you found the contact info, team page, recruiter profile, careers page, etc."
+                      placeholder={t("detail.sourceNotesPlaceholder")}
                     />
                   </div>
                 </div>
@@ -1239,7 +1241,7 @@ export default function ApplicationDetailPage() {
 
         <div>
           <label className="field-label" htmlFor="notes">
-            Notes
+            {t("common.notes")}
           </label>
           <textarea
             id="notes"
@@ -1253,33 +1255,38 @@ export default function ApplicationDetailPage() {
         <div id="assistant" className="list-card scroll-mt-6 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="section-title">Application assistant</div>
+              <div className="section-title">{t("detail.assistant")}</div>
               <p className="section-subtitle">
-                Sync the role link, notes, and recruiter details into retrievable context. Drafted follow-ups and answers are grounded in those sources and held for your review.
+                {t("detail.assistantHelp")}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <div className="badge badge-neutral">
                 {contextLoading
-                  ? "Loading context..."
+                  ? t("detail.loadingContext")
                   : contextStatus
-                    ? `${contextStatus.documentCount} docs • ${contextStatus.chunkCount} chunks`
-                    : "No context yet"}
+                    ? t("detail.contextSummary", {
+                        docs: contextStatus.documentCount,
+                        chunks: contextStatus.chunkCount,
+                      })
+                    : t("detail.noContext")}
               </div>
               <button
                 className="app-button"
                 onClick={syncApplicationContext}
                 disabled={contextSyncing}
               >
-                {contextSyncing ? "Syncing..." : "Sync context"}
+                {contextSyncing ? t("detail.syncing") : t("detail.syncContext")}
               </button>
             </div>
           </div>
 
           <div className="section-subtitle">
-            Re-sync after changing the job link, recruiter details, or notes.
+            {t("detail.resyncHelp")}
             {contextStatus?.lastSyncedAt
-              ? ` Last synced ${new Date(contextStatus.lastSyncedAt).toLocaleString()}.`
+              ? t("detail.lastSynced", {
+                  time: new Date(contextStatus.lastSyncedAt).toLocaleString(dateLocale),
+                })
               : null}
           </div>
 
@@ -1287,7 +1294,7 @@ export default function ApplicationDetailPage() {
 
           {contextWarnings.length > 0 ? (
             <div className="list-card space-y-2">
-              <div className="section-title">Sync notes</div>
+              <div className="section-title">{t("detail.syncNotes")}</div>
               {contextWarnings.map((warning) => (
                 <div key={warning} className="section-subtitle">
                   {warning}
@@ -1304,11 +1311,11 @@ export default function ApplicationDetailPage() {
                     <div>
                       <div className="font-semibold">{document.title}</div>
                       <div className="section-subtitle">
-                        {formatSourceType(document.sourceType)}
+                        {tValue("sourceType", document.sourceType)}
                       </div>
                     </div>
                     <div className="badge badge-neutral">
-                      {document.chunkCount} chunks
+                      {t("detail.chunks", { count: document.chunkCount })}
                     </div>
                   </div>
                   {document.url ? (
@@ -1318,7 +1325,7 @@ export default function ApplicationDetailPage() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      {formatSourceLabel(document.url, "Open source")}
+                      {formatSourceLabel(document.url, t("common.openSource"))}
                     </a>
                   ) : null}
                 </div>
@@ -1326,7 +1333,7 @@ export default function ApplicationDetailPage() {
             </div>
           ) : (
             <div className="empty-state">
-              Syncing creates indexed context from this application so the assistant can answer with sources.
+              {t("detail.syncEmpty")}
             </div>
           )}
 
@@ -1344,9 +1351,9 @@ export default function ApplicationDetailPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button className="app-button-secondary" onClick={remove}>
-            Delete application
+            {t("detail.deleteApplication")}
           </button>
-          <div className="badge badge-neutral">{saving ? "Saving..." : "All changes saved"}</div>
+          <div className="badge badge-neutral">{saving ? t("common.saving") : t("detail.allSaved")}</div>
         </div>
       </section>
     </PageFrame>

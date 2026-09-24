@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/LanguageProvider";
 import { PageFrame } from "@/components/PageFrame";
 import { localYYYYMMDD } from "@/lib/localDate";
 
@@ -60,6 +61,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 export default function RemindersPage() {
+  const { t } = useI18n();
   const [date, setDate] = useState(localYYYYMMDD());
   const [items, setItems] = useState<Reminder[]>([]);
   const [apps, setApps] = useState<AppLite[]>([]);
@@ -82,7 +84,7 @@ export default function RemindersPage() {
       const data = await requestJson<AppListResponse>("/api/applications/simple");
       setApps(data.items ?? []);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load applications."));
+      setError(getErrorMessage(loadError, t("reminders.errLoadApps")));
     } finally {
       setAppsLoading(false);
     }
@@ -97,7 +99,7 @@ export default function RemindersPage() {
       );
       setItems(data.items ?? []);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load reminders."));
+      setError(getErrorMessage(loadError, t("reminders.errLoad")));
     } finally {
       setLoading(false);
     }
@@ -106,6 +108,8 @@ export default function RemindersPage() {
   useEffect(() => {
     setError(null);
     void loadApps();
+    // Reload on data changes only; switching language needs no refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -133,7 +137,7 @@ export default function RemindersPage() {
       setApplicationId("");
       await loadReminders(date);
     } catch (submitError) {
-      setError(getErrorMessage(submitError, "Could not add reminder."));
+      setError(getErrorMessage(submitError, t("reminders.errAdd")));
     } finally {
       setSubmitting(false);
     }
@@ -152,7 +156,7 @@ export default function RemindersPage() {
 
       await loadReminders(date);
     } catch (updateError) {
-      setError(getErrorMessage(updateError, "Could not update reminder."));
+      setError(getErrorMessage(updateError, t("reminders.errUpdate")));
     } finally {
       setSavingId(null);
     }
@@ -166,7 +170,7 @@ export default function RemindersPage() {
       await requestJson(`/api/reminders/${id}`, { method: "DELETE" });
       await loadReminders(date);
     } catch (deleteError) {
-      setError(getErrorMessage(deleteError, "Could not delete reminder."));
+      setError(getErrorMessage(deleteError, t("reminders.errDelete")));
     } finally {
       setDeletingId(null);
     }
@@ -174,25 +178,25 @@ export default function RemindersPage() {
 
   return (
     <PageFrame
-      eyebrow="Reminders"
-      title="One day at a time"
-      subtitle="Create, edit, and check off reminders for any day, each tied to the right application."
-      actions={loading ? <div className="badge badge-neutral">Loading...</div> : null}
+      eyebrow={t("reminders.eyebrow")}
+      title={t("reminders.title")}
+      subtitle={t("reminders.subtitle")}
+      actions={loading ? <div className="badge badge-neutral">{t("common.loading")}</div> : null}
     >
       {error ? <div className="error-banner">{error}</div> : null}
 
       <section className="panel-card space-y-4">
         <div>
-          <h2 className="section-title">Create reminder</h2>
+          <h2 className="section-title">{t("reminders.create")}</h2>
           <p className="section-subtitle">
-            Add a reminder for any date and optionally attach it to an application.
+            {t("reminders.createHelp")}
           </p>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[0.9fr_0.9fr_1.3fr_1.2fr_auto]">
           <div>
             <label className="field-label" htmlFor="date">
-              Date
+              {t("common.date")}
             </label>
             <input
               id="date"
@@ -205,7 +209,7 @@ export default function RemindersPage() {
 
           <div>
             <label className="field-label" htmlFor="time">
-              Time
+              {t("common.time")}
             </label>
             <input
               id="time"
@@ -218,20 +222,20 @@ export default function RemindersPage() {
 
           <div>
             <label className="field-label" htmlFor="message">
-              Message
+              {t("common.message")}
             </label>
             <input
               id="message"
               className="field-input"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Follow up with recruiter"
+              placeholder={t("reminders.messagePlaceholder")}
             />
           </div>
 
           <div>
             <label className="field-label" htmlFor="application">
-              Linked application
+              {t("reminders.linked")}
             </label>
             <select
               id="application"
@@ -240,7 +244,7 @@ export default function RemindersPage() {
               onChange={(e) => setApplicationId(e.target.value)}
               disabled={appsLoading}
             >
-              <option value="">None</option>
+              <option value="">{t("common.none")}</option>
               {apps.map((application) => (
                 <option key={application.id} value={application.id}>
                   {application.company} | {application.role}
@@ -255,7 +259,7 @@ export default function RemindersPage() {
               onClick={add}
               disabled={!message.trim() || submitting}
             >
-              {submitting ? "Adding..." : "Add"}
+              {submitting ? t("common.adding") : t("common.add")}
             </button>
           </div>
         </div>
@@ -264,18 +268,18 @@ export default function RemindersPage() {
       <section className="panel-card space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="section-title">Selected date: {date}</h2>
+            <h2 className="section-title">{t("reminders.selectedDate", { date })}</h2>
             <p className="section-subtitle">
-              Edit date, time, or message inline and the change will save on blur.
+              {t("reminders.inlineHelp")}
             </p>
           </div>
-          {loading ? <div className="badge badge-neutral">Loading...</div> : null}
+          {loading ? <div className="badge badge-neutral">{t("common.loading")}</div> : null}
         </div>
 
         {loading && items.length === 0 ? (
-          <div className="empty-state">Loading reminders...</div>
+          <div className="empty-state">{t("reminders.loadingList")}</div>
         ) : items.length === 0 ? (
-          <div className="empty-state">No reminders for this date.</div>
+          <div className="empty-state">{t("reminders.noneForDate")}</div>
         ) : (
           <ul className="space-y-3">
             {items.map((reminder) => (
@@ -285,7 +289,7 @@ export default function RemindersPage() {
               >
                 <div className="grid gap-3 md:grid-cols-[0.85fr_0.8fr_1.5fr]">
                   <div>
-                    <label className="field-label">Date</label>
+                    <label className="field-label">{t("common.date")}</label>
                     <input
                       className="field-input"
                       type="date"
@@ -303,7 +307,7 @@ export default function RemindersPage() {
                   </div>
 
                   <div>
-                    <label className="field-label">Time</label>
+                    <label className="field-label">{t("common.time")}</label>
                     <input
                       className="field-input"
                       type="time"
@@ -321,7 +325,7 @@ export default function RemindersPage() {
                   </div>
 
                   <div>
-                    <label className="field-label">Message</label>
+                    <label className="field-label">{t("common.message")}</label>
                     <input
                       className="field-input"
                       value={reminder.message}
@@ -347,7 +351,7 @@ export default function RemindersPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="space-y-2">
                     <div className="badge badge-neutral">
-                      {reminder.done ? "done" : "pending"}
+                      {reminder.done ? t("reminders.statusDone") : t("reminders.statusPending")}
                     </div>
 
                     {reminder.application ? (
@@ -358,7 +362,7 @@ export default function RemindersPage() {
                         {reminder.application.company} | {reminder.application.role}
                       </Link>
                     ) : (
-                      <div className="section-subtitle">No linked application</div>
+                      <div className="section-subtitle">{t("reminders.noLinked")}</div>
                     )}
                   </div>
 
@@ -371,17 +375,17 @@ export default function RemindersPage() {
                       disabled={savingId === reminder.id}
                     >
                       {savingId === reminder.id
-                        ? "Saving..."
+                        ? t("common.saving")
                         : reminder.done
-                          ? "Undo"
-                          : "Done"}
+                          ? t("common.undo")
+                          : t("common.done")}
                     </button>
                     <button
                       className="app-button"
                       onClick={() => remove(reminder.id)}
                       disabled={deletingId === reminder.id}
                     >
-                      {deletingId === reminder.id ? "Deleting..." : "Delete"}
+                      {deletingId === reminder.id ? t("common.deleting") : t("common.delete")}
                     </button>
                   </div>
                 </div>

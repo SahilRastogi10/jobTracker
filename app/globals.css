@@ -683,3 +683,37 @@ textarea {
     animation: none;
   }
 }
+
+/* ---------- Language toggle ---------- */
+
+.lang-toggle {
+  display: inline-flex;
+  gap: 2px;
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper-strong);
+}
+
+.lang-toggle button {
+  min-width: 2.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.lang-toggle button:hover {
+  color: var(--ink);
+}
+
+.lang-toggle button.is-active {
+  background: var(--ink);
+  color: var(--paper);
+}

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TODAY_CHANGED_EVENT } from "@/components/AppNav";
+import { useI18n } from "@/components/LanguageProvider";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { PageFrame } from "@/components/PageFrame";
 import { localYYYYMMDD } from "@/lib/localDate";
 
@@ -65,32 +67,37 @@ function addDays(ymd: string, days: number) {
   return localYYYYMMDD(date);
 }
 
-function formatDay(ymd: string, today: string) {
-  if (ymd === today) return "Today";
-  if (ymd === addDays(today, 1)) return "Tomorrow";
-  if (ymd === addDays(today, -1)) return "Yesterday";
+function formatDay(
+  ymd: string,
+  today: string,
+  t: (key: MessageKey) => string,
+  dateLocale: string
+) {
+  if (ymd === today) return t("common.today");
+  if (ymd === addDays(today, 1)) return t("common.tomorrow");
+  if (ymd === addDays(today, -1)) return t("common.yesterday");
   const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+  return new Date(y, m - 1, d).toLocaleDateString(dateLocale, {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 }
 
-function formatTime(time: string) {
+function formatTime(time: string, dateLocale: string) {
   if (!time) return "";
   const [h, m] = time.split(":").map(Number);
-  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, {
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(dateLocale, {
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
-function greeting() {
+function greetingKey(): MessageKey {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return "today.morning";
+  if (hour < 18) return "today.afternoon";
+  return "today.evening";
 }
 
 function stageBadgeClass(stage: string) {
@@ -126,6 +133,7 @@ function notifyTodayChanged() {
 }
 
 export default function TodayPage() {
+  const { t, tValue, dateLocale } = useI18n();
   const [today] = useState(localYYYYMMDD());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -179,7 +187,7 @@ export default function TodayPage() {
       setPendingDrafts(drafts.items ?? []);
       setAppsLite(apps.items ?? []);
     } catch (loadError) {
-      setError(getErrorMessage(loadError, "Could not load today."));
+      setError(getErrorMessage(loadError, t("today.errLoad")));
     } finally {
       setLoading(false);
     }
@@ -271,7 +279,7 @@ export default function TodayPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ done: true }),
         }),
-      "Could not update reminder."
+      t("today.errReminder")
     );
   }
 
@@ -284,7 +292,7 @@ export default function TodayPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "sent" }),
         }),
-      "Could not mark follow-up sent."
+      t("today.errSent")
     );
   }
 
@@ -298,11 +306,14 @@ export default function TodayPage() {
           body: JSON.stringify({
             date: followUp.dueDate < today ? today : followUp.dueDate,
             time: "09:00",
-            message: `Follow up: ${followUp.application.company} | ${followUp.application.role}`,
+            message: t("today.followUpReminder", {
+              company: followUp.application.company,
+              role: followUp.application.role,
+            }),
             followUpId: followUp.id,
           }),
         }),
-      "Could not create reminder."
+      t("today.errCreateReminder")
     );
   }
 
@@ -319,7 +330,7 @@ export default function TodayPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ids, done: true }),
         }),
-      "Could not mark reminders done."
+      t("today.errBatch")
     );
   }
 
@@ -335,7 +346,7 @@ export default function TodayPage() {
       });
       notifyTodayChanged();
     } catch (saveError) {
-      setError(getErrorMessage(saveError, "Could not save daily goal."));
+      setError(getErrorMessage(saveError, t("today.errGoal")));
     }
   }
 
@@ -355,7 +366,7 @@ export default function TodayPage() {
       notifyTodayChanged();
       await loadAll();
     } catch (submitError) {
-      setError(getErrorMessage(submitError, "Could not add application."));
+      setError(getErrorMessage(submitError, t("today.errAddApplication")));
     } finally {
       setSubmittingApplication(false);
     }
@@ -381,7 +392,7 @@ export default function TodayPage() {
       setRemDate(today);
       await loadAll();
     } catch (submitError) {
-      setError(getErrorMessage(submitError, "Could not add reminder."));
+      setError(getErrorMessage(submitError, t("today.errAddReminder")));
     } finally {
       setSubmittingReminder(false);
     }
@@ -401,7 +412,7 @@ export default function TodayPage() {
         });
         setNoteStatus("saved");
       } catch (saveError) {
-        setError(getErrorMessage(saveError, "Could not save daily note."));
+        setError(getErrorMessage(saveError, t("today.errNote")));
         setNoteStatus("idle");
       }
     }, 600);
@@ -417,12 +428,14 @@ export default function TodayPage() {
       return (
         <li key={item.key} className="agenda-item" data-kind="follow-up" data-overdue={overdue}>
           <div className="agenda-when">
-            {formatDay(item.date, today)}
-            {reminder ? <div className="font-normal">{formatTime(reminder.time)}</div> : null}
+            {formatDay(item.date, today, t, dateLocale)}
+            {reminder ? <div className="font-normal">{formatTime(reminder.time, dateLocale)}</div> : null}
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <div className="agenda-kind">Follow up by {followUp.channel}</div>
+              <div className="agenda-kind">
+                {t("today.followUpBy", { channel: tValue("channel", followUp.channel) })}
+              </div>
               <Link
                 href={`/applications/${followUp.application.id}`}
                 className="block font-semibold hover:text-[color:var(--accent)]"
@@ -431,7 +444,7 @@ export default function TodayPage() {
               </Link>
               <div className="section-subtitle">
                 {followUp.application.role}
-                {recipient ? ` | to ${recipient}` : ""}
+                {recipient ? t("today.toRecipient", { name: recipient }) : ""}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -441,7 +454,7 @@ export default function TodayPage() {
                   onClick={() => remindForFollowUp(followUp)}
                   disabled={busy}
                 >
-                  Remind me
+                  {t("today.remindMe")}
                 </button>
               ) : null}
               <button
@@ -449,7 +462,7 @@ export default function TodayPage() {
                 onClick={() => markFollowUpSent(followUp)}
                 disabled={busy}
               >
-                {busy ? "Saving..." : "Mark sent"}
+                {busy ? t("common.saving") : t("today.markSent")}
               </button>
             </div>
           </div>
@@ -463,12 +476,12 @@ export default function TodayPage() {
       return (
         <li key={item.key} className="agenda-item" data-kind="reminder" data-overdue={overdue}>
           <div className="agenda-when">
-            {formatDay(item.date, today)}
-            <div className="font-normal">{formatTime(reminder.time)}</div>
+            {formatDay(item.date, today, t, dateLocale)}
+            <div className="font-normal">{formatTime(reminder.time, dateLocale)}</div>
           </div>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <div className="agenda-kind">Reminder</div>
+              <div className="agenda-kind">{t("today.reminder")}</div>
               <div className="font-semibold">{reminder.message}</div>
               {reminder.application ? (
                 <Link className="subtle-link" href={`/applications/${reminder.application.id}`}>
@@ -481,7 +494,7 @@ export default function TodayPage() {
               onClick={() => completeReminder(reminder)}
               disabled={busy}
             >
-              {busy ? "Saving..." : "Done"}
+              {busy ? t("common.saving") : t("common.done")}
             </button>
           </div>
         </li>
@@ -491,18 +504,19 @@ export default function TodayPage() {
     const { draft } = item;
     return (
       <li key={item.key} className="agenda-item" data-kind="review" data-overdue={false}>
-        <div className="agenda-when">Waiting</div>
+        <div className="agenda-when">{t("today.waiting")}</div>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="agenda-kind">Review draft</div>
+            <div className="agenda-kind">{t("today.reviewDraft")}</div>
             <div className="font-semibold">
-              {draft.kind === "follow_up_email" ? "Follow-up message" : "Assistant answer"} for{" "}
-              {draft.application.company}
+              {t(draft.kind === "follow_up_email" ? "today.followUpMessageFor" : "today.answerFor", {
+                company: draft.application.company,
+              })}
             </div>
-            <div className="section-subtitle">Nothing is used until you approve it.</div>
+            <div className="section-subtitle">{t("today.notUsedUntilApproved")}</div>
           </div>
           <Link className="app-button" href={`/applications/${draft.application.id}#assistant`}>
-            Review
+            {t("today.review")}
           </Link>
         </div>
       </li>
@@ -535,30 +549,34 @@ export default function TodayPage() {
   const filledDots = goal > 0 ? Math.round((Math.min(todaysApps.length, goal) / goal) * goalDots) : 0;
 
   const subtitle = loading
-    ? "Pulling together your day..."
+    ? t("today.loadingSubtitle")
     : needsYou === 0
-      ? "Nothing urgent. A good day to send a few more applications."
-      : `${needsYou} ${needsYou === 1 ? "thing needs" : "things need"} you today${
-          agenda.overdue.length > 0 ? `, ${agenda.overdue.length} overdue` : ""
+      ? t("today.allClearSubtitle")
+      : `${needsYou === 1 ? t("today.needsOne") : t("today.needsMany", { count: needsYou })}${
+          agenda.overdue.length === 1
+            ? t("today.overdueSuffixOne")
+            : agenda.overdue.length > 1
+              ? t("today.overdueSuffix", { count: agenda.overdue.length })
+              : ""
         }.`;
 
   return (
     <PageFrame
-      eyebrow={new Date().toLocaleDateString(undefined, {
+      eyebrow={new Date().toLocaleDateString(dateLocale, {
         weekday: "long",
         month: "long",
         day: "numeric",
       })}
       title={
         <>
-          {greeting()}
+          {t(greetingKey())}
           <em>.</em>
         </>
       }
       subtitle={subtitle}
       actions={
         <Link href="/applications" className="app-button-secondary">
-          Open pipeline
+          {t("today.openPipeline")}
         </Link>
       }
     >
@@ -567,18 +585,18 @@ export default function TodayPage() {
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-7">
           {loading ? (
-            <div className="empty-state">Loading your agenda...</div>
+            <div className="empty-state">{t("today.loadingAgenda")}</div>
           ) : needsYou === 0 && agenda.soon.length === 0 ? (
             <div className="panel-card py-10 text-center">
-              <div className="font-display text-2xl">All clear.</div>
+              <div className="font-display text-2xl">{t("today.allClear")}</div>
               <p className="section-subtitle mt-2">
-                No reminders, follow-ups, or drafts waiting. Log an application or plan a follow-up to fill this in.
+                {t("today.allClearBody")}
               </p>
             </div>
           ) : (
             <>
               {renderGroup(
-                "Overdue",
+                t("today.groupOverdue"),
                 agenda.overdue,
                 true,
                 overdueReminderCount > 1 ? (
@@ -587,18 +605,18 @@ export default function TodayPage() {
                     onClick={clearOverdueReminders}
                     disabled={busyKey === "overdue-batch"}
                   >
-                    Mark {overdueReminderCount} reminders done
+                    {t("today.markRemindersDone", { count: overdueReminderCount })}
                   </button>
                 ) : null
               )}
-              {renderGroup("Today", agenda.today, false)}
+              {renderGroup(t("today.groupToday"), agenda.today, false)}
               {agenda.today.length === 0 && agenda.overdue.length === 0 ? (
-                <div className="empty-state">Nothing due today.</div>
+                <div className="empty-state">{t("today.nothingToday")}</div>
               ) : null}
-              {renderGroup(`Next ${AGENDA_DAYS_AHEAD} days`, agenda.soon, false)}
+              {renderGroup(t("today.groupSoon", { days: AGENDA_DAYS_AHEAD }), agenda.soon, false)}
               {agenda.later > 0 ? (
                 <Link className="subtle-link" href="/calendar">
-                  {agenda.later} more scheduled later, see the calendar
+                  {t("today.moreLater", { count: agenda.later })}
                 </Link>
               ) : null}
             </>
@@ -609,26 +627,26 @@ export default function TodayPage() {
           <div className="panel-card space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="mini-stat-label">Applied today</div>
+                <div className="mini-stat-label">{t("today.appliedToday")}</div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="font-display text-5xl font-medium leading-none">
                     {todaysApps.length}
                   </span>
-                  <span className="section-subtitle">of {goal}</span>
+                  <span className="section-subtitle">{t("today.ofGoal", { goal })}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1">
                 <button
                   className="app-button-secondary !min-h-9 !px-3"
                   onClick={() => saveGoal(Math.max(0, goal - 1))}
-                  aria-label="Lower daily goal"
+                  aria-label={t("today.lowerGoal")}
                 >
                   -
                 </button>
                 <button
                   className="app-button-secondary !min-h-9 !px-3"
                   onClick={() => saveGoal(goal + 1)}
-                  aria-label="Raise daily goal"
+                  aria-label={t("today.raiseGoal")}
                 >
                   +
                 </button>
@@ -648,30 +666,32 @@ export default function TodayPage() {
                     <Link className="font-medium hover:underline" href={`/applications/${application.id}`}>
                       {application.company}
                     </Link>
-                    <span className={stageBadgeClass(application.stage)}>{application.stage}</span>
+                    <span className={stageBadgeClass(application.stage)}>
+                      {tValue("stage", application.stage)}
+                    </span>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="section-subtitle">
-                {goal > 0 ? `Log your first of ${goal} below.` : "No goal set for today."}
+                {goal > 0 ? t("today.logFirst", { goal }) : t("today.noGoal")}
               </p>
             )}
           </div>
 
           <div className="panel-card space-y-3">
-            <div className="section-title">Log an application</div>
+            <div className="section-title">{t("today.logApplication")}</div>
             <input
               className="field-input"
-              placeholder="Company"
-              aria-label="Company"
+              placeholder={t("common.company")}
+              aria-label={t("common.company")}
               value={company}
               onChange={(e) => setCompany(e.target.value)}
             />
             <input
               className="field-input"
-              placeholder="Role"
-              aria-label="Role"
+              placeholder={t("common.role")}
+              aria-label={t("common.role")}
               value={role}
               onChange={(e) => setRole(e.target.value)}
             />
@@ -679,7 +699,7 @@ export default function TodayPage() {
               <input
                 className="field-input"
                 type="date"
-                aria-label="Applied date"
+                aria-label={t("today.appliedDate")}
                 value={appDate}
                 onChange={(e) => setAppDate(e.target.value)}
               />
@@ -688,17 +708,17 @@ export default function TodayPage() {
                 onClick={addApplication}
                 disabled={!company.trim() || !role.trim() || submittingApplication}
               >
-                {submittingApplication ? "Adding..." : "Add"}
+                {submittingApplication ? t("common.adding") : t("common.add")}
               </button>
             </div>
           </div>
 
           <div className="panel-card space-y-3">
-            <div className="section-title">Set a reminder</div>
+            <div className="section-title">{t("today.setReminder")}</div>
             <input
               className="field-input"
-              placeholder="What do you need to remember?"
-              aria-label="Reminder message"
+              placeholder={t("today.reminderPlaceholder")}
+              aria-label={t("today.reminderPlaceholder")}
               value={remMsg}
               onChange={(e) => setRemMsg(e.target.value)}
             />
@@ -706,25 +726,25 @@ export default function TodayPage() {
               <input
                 className="field-input"
                 type="date"
-                aria-label="Reminder date"
+                aria-label={t("today.reminderDate")}
                 value={remDate}
                 onChange={(e) => setRemDate(e.target.value)}
               />
               <input
                 className="field-input"
                 type="time"
-                aria-label="Reminder time"
+                aria-label={t("today.reminderTime")}
                 value={remTime}
                 onChange={(e) => setRemTime(e.target.value)}
               />
             </div>
             <select
               className="field-select"
-              aria-label="Link to application"
+              aria-label={t("today.notLinked")}
               value={remAppId}
               onChange={(e) => setRemAppId(e.target.value)}
             >
-              <option value="">Not linked to an application</option>
+              <option value="">{t("today.notLinked")}</option>
               {appsLite.map((application) => (
                 <option key={application.id} value={application.id}>
                   {application.company} | {application.role}
@@ -737,23 +757,27 @@ export default function TodayPage() {
                 onClick={addReminder}
                 disabled={!remMsg.trim() || submittingReminder}
               >
-                {submittingReminder ? "Adding..." : "Add reminder"}
+                {submittingReminder ? t("common.adding") : t("today.addReminder")}
               </button>
             </div>
           </div>
 
           <div className="panel-card space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="section-title">Notes</div>
+              <div className="section-title">{t("common.notes")}</div>
               <span className="section-subtitle text-xs">
-                {noteStatus === "saving" ? "Saving..." : noteStatus === "saved" ? "Saved" : ""}
+                {noteStatus === "saving"
+                  ? t("common.saving")
+                  : noteStatus === "saved"
+                    ? t("today.saved")
+                    : ""}
               </span>
             </div>
             <textarea
               className="field-textarea"
               value={note}
               onChange={(e) => onNoteChange(e.target.value)}
-              placeholder="What happened today?"
+              placeholder={t("today.notesPlaceholder")}
             />
           </div>
         </aside>
