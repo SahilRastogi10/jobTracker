@@ -116,4 +116,4 @@ extension/            Chrome/Edge extension
 
 ## Privacy
 
-The database, the AI models, and the extension's queue all stay on your machine. The only outside services are the optional ones you configure: the job posting fetch during sync, Tavily for contact research, and ElevenLabs for Listen.
+The database, your resumes, the AI models, and the extension's queue all stay on your machine. The app only reaches outside for job postings you ask it to read (during sync or resume match), the PDF reader library (pdf.js, loaded from the jsDelivr CDN; your file is read locally in the browser), and the optional services you configure: Tavily for contact research and ElevenLabs for Listen.
