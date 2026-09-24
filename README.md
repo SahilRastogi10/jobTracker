@@ -18,7 +18,7 @@ Everything runs on your own machine. The AI features use local [Ollama](https://
 **Resume match**
 
 - Save several resume versions (upload a PDF or paste the text) and compare any of them with a job description, given as a link or pasted text.
-- Get a **match score out of 100** and the **missing keywords**, with required ones first. Keywords come from a built-in list of about 250 skills and tools that understands common spellings ("Postgres", "k8s", "ReactJS"), weighted by whether the posting lists them as required, mentioned, or preferred.
+- Get a **match score out of 100** and the **missing keywords**, with required ones first. Keywords come from a built-in list of 184 skills and tools (about 330 spellings) that understands common variants ("Postgres", "k8s", "ReactJS"), weighted by whether the posting lists them as required, mentioned, or preferred.
 - Optionally let the local model add job-specific terms the list doesn't know; only terms that actually appear in the posting are kept.
 - Open it straight from an application with **Check resume match**.
 
