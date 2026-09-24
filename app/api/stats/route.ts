@@ -15,6 +15,7 @@ export async function GET() {
     doneReminders,
     overdueFollowUps,
     upcomingFollowUps,
+    sentFollowUps,
   ] = await Promise.all([
     prisma.application.count(),
     prisma.application.groupBy({
@@ -23,12 +24,9 @@ export async function GET() {
     }),
     prisma.reminder.count({ where: { done: false } }),
     prisma.reminder.count({ where: { done: true } }),
-    prisma.application.count({
-      where: { followUpDate: { not: null, lt: today } },
-    }),
-    prisma.application.count({
-      where: { followUpDate: { not: null, gte: today } },
-    }),
+    prisma.followUp.count({ where: { status: "planned", dueDate: { lt: today } } }),
+    prisma.followUp.count({ where: { status: "planned", dueDate: { gte: today } } }),
+    prisma.followUp.count({ where: { status: "sent" } }),
   ]);
 
   const stageCounts = Object.fromEntries(
@@ -46,6 +44,7 @@ export async function GET() {
     followUps: {
       overdue: overdueFollowUps,
       upcoming: upcomingFollowUps,
+      sent: sentFollowUps,
     },
   });
 }

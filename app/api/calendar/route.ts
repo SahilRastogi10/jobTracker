@@ -16,7 +16,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const [apps, rems] = await Promise.all([
+  const [apps, rems, followUps] = await Promise.all([
     prisma.application.findMany({
       where: { dateApplied: { gte: start, lte: end } },
       select: { id: true, dateApplied: true, company: true, role: true, stage: true },
@@ -27,6 +27,10 @@ export async function GET(req: Request) {
       select: { id: true, date: true, time: true, message: true, done: true, applicationId: true },
       orderBy: [{ date: "asc" }, { time: "asc" }],
     }),
+    prisma.followUp.findMany({
+      where: { status: "planned", dueDate: { gte: start, lte: end } },
+      select: { dueDate: true },
+    }),
   ]);
 
   const appsByDate: Record<string, number> = {};
@@ -35,10 +39,14 @@ export async function GET(req: Request) {
   const remsByDate: Record<string, number> = {};
   for (const r of rems) remsByDate[r.date] = (remsByDate[r.date] ?? 0) + 1;
 
+  const followUpsByDate: Record<string, number> = {};
+  for (const f of followUps) followUpsByDate[f.dueDate] = (followUpsByDate[f.dueDate] ?? 0) + 1;
+
   return NextResponse.json({
     start,
     end,
     appsByDate,
     remsByDate,
+    followUpsByDate,
   });
 }

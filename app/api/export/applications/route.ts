@@ -21,6 +21,10 @@ export async function GET() {
         select: { name: true, email: true },
         orderBy: { createdAt: "asc" },
       },
+      followUps: {
+        select: { dueDate: true, status: true },
+        orderBy: { dueDate: "asc" },
+      },
     },
   });
 
@@ -30,7 +34,7 @@ export async function GET() {
     "role",
     "stage",
     "dateApplied",
-    "followUpDate",
+    "followUps",
     "link",
     "recruiters",
     "notes",
@@ -44,7 +48,7 @@ export async function GET() {
     a.role,
     a.stage,
     a.dateApplied,
-    a.followUpDate ?? "",
+    a.followUps.map((f) => `${f.dueDate} ${f.status}`).join("; "),
     a.link ?? "",
     a.recruiters.map(formatRecruiterSummary).filter(Boolean).join("; "),
     a.notes ?? "",

@@ -10,7 +10,7 @@ type Application = {
   role: string;
   stage: string;
   dateApplied: string;
-  followUpDate?: string | null;
+  nextFollowUpDate?: string | null;
 };
 
 function stageBadgeClass(stage: string) {
@@ -163,9 +163,9 @@ export default function ApplicationsPage() {
                           <span className="badge badge-neutral">
                             Applied {application.dateApplied}
                           </span>
-                          {application.followUpDate ? (
+                          {application.nextFollowUpDate ? (
                             <span className="badge badge-neutral">
-                              Follow up {application.followUpDate}
+                              Follow up {application.nextFollowUpDate}
                             </span>
                           ) : null}
                         </div>

@@ -28,7 +28,8 @@ export async function POST(req: Request) {
   const date = String(body.date ?? "").trim();
   const time = String(body.time ?? "").trim();
   const message = String(body.message ?? "").trim();
-  const applicationId = body.applicationId ? String(body.applicationId) : null;
+  let applicationId = body.applicationId ? String(body.applicationId) : null;
+  const followUpId = body.followUpId ? String(body.followUpId) : null;
 
   if (!date || !time || !message) {
     return NextResponse.json(
@@ -37,8 +38,19 @@ export async function POST(req: Request) {
     );
   }
 
+  if (followUpId) {
+    const followUp = await prisma.followUp.findUnique({
+      where: { id: followUpId },
+      select: { applicationId: true },
+    });
+    if (!followUp) {
+      return NextResponse.json({ error: "followUpId not found" }, { status: 400 });
+    }
+    applicationId = followUp.applicationId;
+  }
+
   const created = await prisma.reminder.create({
-    data: { date, time, message, applicationId },
+    data: { date, time, message, applicationId, followUpId },
   });
 
   return NextResponse.json({ item: created }, { status: 201 });

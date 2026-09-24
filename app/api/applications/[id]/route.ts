@@ -46,12 +46,6 @@ export async function PATCH(req: Request) {
             ? String(body.notes)
             : null
           : undefined,
-      followUpDate:
-        body.followUpDate !== undefined
-          ? body.followUpDate
-            ? String(body.followUpDate)
-            : null
-          : undefined,
       dateApplied: body.dateApplied !== undefined ? String(body.dateApplied) : undefined,
     },
   });

@@ -25,10 +25,10 @@ model Application {
   stage        String   @default("applied") // applied, interview, rejected, offer
   dateApplied  String   // YYYY-MM-DD local date
   notes        String?
-  followUpDate String?  // YYYY-MM-DD local date
 
   reminders    Reminder[]
   recruiters   Recruiter[]
+  followUps    FollowUp[]
   documents    ApplicationDocument[]
   chunks       DocumentChunk[]
 }
@@ -46,8 +46,30 @@ model Recruiter {
   source        String?
 
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  followUps     FollowUp[]
 
   @@index([applicationId])
+}
+
+model FollowUp {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  applicationId String
+  recruiterId   String?
+
+  dueDate       String    // YYYY-MM-DD local date
+  channel       String    @default("email") // email, linkedin, other
+  status        String    @default("planned") // planned, sent, skipped
+  sentAt        DateTime?
+  notes         String?
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  recruiter     Recruiter?  @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  reminders     Reminder[]
+
+  @@index([applicationId])
+  @@index([status, dueDate])
 }
 
 model DailyGoal {
@@ -73,6 +95,8 @@ model Reminder {
 
   applicationId String?
   application   Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  followUpId    String?
+  followUp      FollowUp?    @relation(fields: [followUpId], references: [id], onDelete: Cascade)
 }
 
 model ApplicationDocument {

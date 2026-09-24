@@ -31,10 +31,10 @@ type Reminder = {
 
 type FollowUp = {
   id: string;
-  company: string;
-  role: string;
-  stage: string;
-  followUpDate: string;
+  dueDate: string;
+  channel: string;
+  application: { id: string; company: string; role: string; stage: string };
+  recruiter?: { id: string; name?: string | null; email?: string | null } | null;
   hasReminder: boolean;
 };
 
@@ -389,27 +389,21 @@ export default function HomePage() {
   }
 
   async function createReminderForFollowUp(followUp: FollowUp) {
-    const busyKey = `${followUp.id}:${followUp.followUpDate}`;
+    const busyKey = followUp.id;
 
     setError(null);
     setFollowUpBusyKey(busyKey);
 
     try {
-      const existsData = await requestJson<{ exists: boolean }>(
-        `/api/reminders/exists?applicationId=${encodeURIComponent(
-          followUp.id
-        )}&date=${encodeURIComponent(followUp.followUpDate)}`
-      );
-
-      if (!existsData.exists) {
+      if (!followUp.hasReminder) {
         await requestJson("/api/reminders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            date: followUp.followUpDate,
+            date: followUp.dueDate,
             time: "09:00",
-            message: `Follow up: ${followUp.company} | ${followUp.role}`,
-            applicationId: followUp.id,
+            message: `Follow up: ${followUp.application.company} | ${followUp.application.role}`,
+            followUpId: followUp.id,
           }),
         });
       }
@@ -829,7 +823,7 @@ export default function HomePage() {
         ) : (
           <ul className="space-y-2">
             {overdueFollowUps.map((followUp) => {
-              const busyKey = `${followUp.id}:${followUp.followUpDate}`;
+              const busyKey = followUp.id;
 
               return (
                 <li
@@ -838,11 +832,21 @@ export default function HomePage() {
                 >
                   <div className="space-y-1">
                     <div className="font-medium">
-                      {followUp.followUpDate} | {followUp.company}
+                      {followUp.dueDate} | {followUp.application.company}
                     </div>
-                    <div className="section-subtitle">{followUp.role}</div>
-                    <div className={stageBadgeClass(followUp.stage)}>{followUp.stage}</div>
-                    <Link className="subtle-link" href={`/applications/${followUp.id}`}>
+                    <div className="section-subtitle">
+                      {followUp.application.role} | {followUp.channel}
+                      {followUp.recruiter
+                        ? ` to ${followUp.recruiter.name || followUp.recruiter.email}`
+                        : ""}
+                    </div>
+                    <div className={stageBadgeClass(followUp.application.stage)}>
+                      {followUp.application.stage}
+                    </div>
+                    <Link
+                      className="subtle-link"
+                      href={`/applications/${followUp.application.id}`}
+                    >
                       Edit application
                     </Link>
                   </div>
@@ -882,7 +886,7 @@ export default function HomePage() {
         ) : (
           <ul className="space-y-2">
             {upcomingFollowUps.map((followUp) => {
-              const busyKey = `${followUp.id}:${followUp.followUpDate}`;
+              const busyKey = followUp.id;
 
               return (
                 <li
@@ -891,11 +895,21 @@ export default function HomePage() {
                 >
                   <div className="space-y-1">
                     <div className="font-medium">
-                      {followUp.followUpDate} | {followUp.company}
+                      {followUp.dueDate} | {followUp.application.company}
                     </div>
-                    <div className="section-subtitle">{followUp.role}</div>
-                    <div className={stageBadgeClass(followUp.stage)}>{followUp.stage}</div>
-                    <Link className="subtle-link" href={`/applications/${followUp.id}`}>
+                    <div className="section-subtitle">
+                      {followUp.application.role} | {followUp.channel}
+                      {followUp.recruiter
+                        ? ` to ${followUp.recruiter.name || followUp.recruiter.email}`
+                        : ""}
+                    </div>
+                    <div className={stageBadgeClass(followUp.application.stage)}>
+                      {followUp.application.stage}
+                    </div>
+                    <Link
+                      className="subtle-link"
+                      href={`/applications/${followUp.application.id}`}
+                    >
                       Edit application
                     </Link>
                   </div>

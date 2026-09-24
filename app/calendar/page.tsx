@@ -38,14 +38,25 @@ type DayReminder = {
   application?: { id: string; company: string; role: string } | null;
 };
 
+type DayFollowUp = {
+  id: string;
+  dueDate: string;
+  channel: string;
+  status: string;
+  application: { id: string; company: string; role: string };
+  recruiter?: { name?: string | null; email?: string | null } | null;
+};
+
 type CalendarCountsResponse = {
   appsByDate: Record<string, number>;
   remsByDate: Record<string, number>;
+  followUpsByDate: Record<string, number>;
 };
 
 type CalendarDayResponse = {
   applications: DayApp[];
   reminders: DayReminder[];
+  followUps: DayFollowUp[];
 };
 
 async function readJson(res: Response) {
@@ -88,10 +99,12 @@ export default function CalendarPage() {
 
   const [appsByDate, setAppsByDate] = useState<Record<string, number>>({});
   const [remsByDate, setRemsByDate] = useState<Record<string, number>>({});
+  const [followUpsByDate, setFollowUpsByDate] = useState<Record<string, number>>({});
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const [dayApps, setDayApps] = useState<DayApp[]>([]);
   const [dayRems, setDayRems] = useState<DayReminder[]>([]);
+  const [dayFollowUps, setDayFollowUps] = useState<DayFollowUp[]>([]);
 
   const [countsLoading, setCountsLoading] = useState(true);
   const [dayLoading, setDayLoading] = useState(true);
@@ -121,6 +134,7 @@ export default function CalendarPage() {
       );
       setAppsByDate(data.appsByDate ?? {});
       setRemsByDate(data.remsByDate ?? {});
+      setFollowUpsByDate(data.followUpsByDate ?? {});
     } catch (loadError) {
       setError(getErrorMessage(loadError, "Could not load month counts."));
     } finally {
@@ -137,6 +151,7 @@ export default function CalendarPage() {
       );
       setDayApps(data.applications ?? []);
       setDayRems(data.reminders ?? []);
+      setDayFollowUps(data.followUps ?? []);
     } catch (loadError) {
       setError(getErrorMessage(loadError, "Could not load date details."));
     } finally {
@@ -231,7 +246,7 @@ export default function CalendarPage() {
 
           <div className="text-center">
             <div className="section-title">{monthLabel}</div>
-            <div className="section-subtitle">Applications and reminders by day</div>
+            <div className="section-subtitle">Applications, reminders, and follow-ups by day</div>
           </div>
 
           <button className="app-button-secondary" onClick={nextMonth}>
@@ -258,6 +273,7 @@ export default function CalendarPage() {
 
             const aCount = appsByDate[cell.dateStr] ?? 0;
             const rCount = remsByDate[cell.dateStr] ?? 0;
+            const fCount = followUpsByDate[cell.dateStr] ?? 0;
             const isSelected = cell.dateStr === selectedDate;
             const isToday = cell.dateStr === todayStr;
 
@@ -279,6 +295,9 @@ export default function CalendarPage() {
                 <div className="mt-3 space-y-2">
                   <div className="badge badge-neutral">Apps {aCount}</div>
                   <div className="badge badge-neutral">Rem {rCount}</div>
+                  {fCount > 0 ? (
+                    <div className="badge badge-interview">Follow-up {fCount}</div>
+                  ) : null}
                 </div>
               </button>
             );
@@ -297,7 +316,7 @@ export default function CalendarPage() {
           {dayLoading ? <div className="badge badge-neutral">Loading...</div> : null}
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-3">
             <div className="section-title">Applications</div>
             {dayLoading && dayApps.length === 0 ? (
@@ -362,6 +381,42 @@ export default function CalendarPage() {
                             ? "Undo"
                             : "Done"}
                       </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <div className="section-title">Follow-ups</div>
+            {dayLoading && dayFollowUps.length === 0 ? (
+              <div className="empty-state">Loading follow-ups...</div>
+            ) : dayFollowUps.length === 0 ? (
+              <div className="empty-state">No follow-ups.</div>
+            ) : (
+              <ul className="space-y-3">
+                {dayFollowUps.map((followUp) => (
+                  <li key={followUp.id} className="list-card">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="badge badge-neutral">{followUp.channel}</span>
+                        <span className="badge badge-neutral">{followUp.status}</span>
+                      </div>
+                      <div className="font-semibold">
+                        {followUp.application.company} | {followUp.application.role}
+                      </div>
+                      {followUp.recruiter ? (
+                        <div className="section-subtitle">
+                          To {followUp.recruiter.name || followUp.recruiter.email}
+                        </div>
+                      ) : null}
+                      <Link
+                        className="subtle-link"
+                        href={`/applications/${followUp.application.id}`}
+                      >
+                        Open application
+                      </Link>
                     </div>
                   </li>
                 ))}

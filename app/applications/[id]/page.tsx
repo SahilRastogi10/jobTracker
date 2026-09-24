@@ -13,7 +13,6 @@ type Application = {
   stage: string;
   dateApplied: string;
   notes?: string | null;
-  followUpDate?: string | null;
 };
 
 type Recruiter = {
@@ -26,6 +25,24 @@ type Recruiter = {
 };
 
 type RecruiterPatch = Partial<Omit<Recruiter, "id">>;
+
+type FollowUp = {
+  id: string;
+  dueDate: string;
+  channel: string;
+  status: string;
+  sentAt?: string | null;
+  notes?: string | null;
+  recruiterId?: string | null;
+  hasReminder: boolean;
+};
+
+type FollowUpPatch = Partial<
+  Pick<FollowUp, "dueDate" | "channel" | "status" | "notes" | "recruiterId">
+>;
+
+const FOLLOW_UP_CHANNELS = ["email", "linkedin", "other"] as const;
+const FOLLOW_UP_STATUSES = ["planned", "sent", "skipped"] as const;
 
 type ContactResearchResult = {
   title?: string;
@@ -161,8 +178,9 @@ export default function ApplicationDetailPage() {
   const [item, setItem] = useState<Application | null>(null);
   const [recruiters, setRecruiters] = useState<Recruiter[]>([]);
   const [saveTarget, setSaveTarget] = useState<string>("new");
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  const [followUpBusyId, setFollowUpBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [creatingFU, setCreatingFU] = useState(false);
   const [researchLoading, setResearchLoading] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   const [researchResults, setResearchResults] =
@@ -194,6 +212,13 @@ export default function ApplicationDetailPage() {
     if (!res.ok) return;
     const data = await res.json();
     setRecruiters(Array.isArray(data.items) ? data.items : []);
+  }
+
+  async function loadFollowUps(appId: string) {
+    const res = await fetch(`/api/applications/${appId}/followups`);
+    if (!res.ok) return;
+    const data = await res.json();
+    setFollowUps(Array.isArray(data.items) ? data.items : []);
   }
 
   async function loadContextStatus(appId: string) {
@@ -229,6 +254,7 @@ export default function ApplicationDetailPage() {
     if (!id) return;
     void load(id);
     void loadRecruiters(id);
+    void loadFollowUps(id);
     void loadContextStatus(id);
   }, [id]);
 
@@ -254,50 +280,72 @@ export default function ApplicationDetailPage() {
     router.push("/applications");
   }
 
-  async function quickFollowUp() {
+  async function addFollowUp() {
     if (!item) return;
-    setCreatingFU(true);
+    const lastDueDate = followUps.at(-1)?.dueDate;
+    const dueDate = addDays(lastDueDate ?? item.dateApplied, 7);
 
-    const followDate = item.followUpDate ?? addDays(item.dateApplied, 7);
-
-    const checkRes = await fetch(
-      `/api/reminders/exists?applicationId=${encodeURIComponent(
-        item.id
-      )}&date=${encodeURIComponent(followDate)}`
+    const res = await fetch(`/api/applications/${item.id}/followups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dueDate }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setFollowUps((current) =>
+      [...current, data.item as FollowUp].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     );
-    const checkData = await checkRes.json();
+  }
 
-    if (checkData.exists) {
-      setCreatingFU(false);
-      alert("A follow up reminder already exists for this date.");
+  function editFollowUpLocal(followUpId: string, patch: FollowUpPatch) {
+    setFollowUps((current) =>
+      current.map((followUp) =>
+        followUp.id === followUpId ? { ...followUp, ...patch } : followUp
+      )
+    );
+  }
+
+  async function saveFollowUp(followUpId: string, patch: FollowUpPatch) {
+    setSaving(true);
+    const res = await fetch(`/api/followups/${followUpId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    setSaving(false);
+    const data = await res.json();
+    if (!res.ok) {
+      alert(typeof data?.error === "string" ? data.error : "Could not save follow-up.");
+      if (item) void loadFollowUps(item.id);
       return;
     }
+    editFollowUpLocal(followUpId, data.item);
+  }
 
-    if (!item.followUpDate) {
-      const res = await fetch(`/api/applications/${item.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ followUpDate: followDate }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItem(data.item);
-      }
-    }
+  async function deleteFollowUp(followUpId: string) {
+    if (!confirm("Delete this follow-up and its reminders?")) return;
+    const res = await fetch(`/api/followups/${followUpId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setFollowUps((current) => current.filter((followUp) => followUp.id !== followUpId));
+  }
 
-    await fetch("/api/reminders", {
+  async function createFollowUpReminder(followUp: FollowUp) {
+    if (!item) return;
+    setFollowUpBusyId(followUp.id);
+
+    const res = await fetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        date: followDate,
+        date: followUp.dueDate,
         time: "09:00",
         message: `Follow up: ${item.company} | ${item.role}`,
-        applicationId: item.id,
+        followUpId: followUp.id,
       }),
     });
 
-    setCreatingFU(false);
-    alert(`Follow up reminder created for ${followDate}`);
+    setFollowUpBusyId(null);
+    if (res.ok) editFollowUpLocal(followUp.id, { hasReminder: true } as FollowUpPatch);
   }
 
   async function runContactResearch() {
@@ -376,6 +424,11 @@ export default function ApplicationDetailPage() {
     const res = await fetch(`/api/recruiters/${recruiterId}`, { method: "DELETE" });
     if (!res.ok) return;
     setRecruiters((current) => current.filter((recruiter) => recruiter.id !== recruiterId));
+    setFollowUps((current) =>
+      current.map((followUp) =>
+        followUp.recruiterId === recruiterId ? { ...followUp, recruiterId: null } : followUp
+      )
+    );
     if (saveTarget === recruiterId) setSaveTarget("new");
   }
 
@@ -605,38 +658,150 @@ export default function ApplicationDetailPage() {
             />
           </div>
 
-          <div>
-            <label className="field-label" htmlFor="follow-up-date">
-              Follow-up Date
-            </label>
-            <input
-              id="follow-up-date"
-              className="field-input"
-              type="date"
-              value={item.followUpDate ?? ""}
-              onChange={(e) => setItem({ ...item, followUpDate: e.target.value })}
-              onBlur={() => save({ followUpDate: item.followUpDate ?? "" })}
-            />
-          </div>
         </div>
 
         <div className="list-card space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="section-title">Quick follow-up</div>
+              <div className="section-title">Follow-ups</div>
               <p className="section-subtitle">
-                Create a linked reminder using the existing follow-up date, or default to seven days after applying.
+                Plan each touchpoint, pick who it goes to, and mark it sent once it is out. New follow-ups default to seven days after the last one.
               </p>
             </div>
-
-            <button
-              className="app-button"
-              onClick={quickFollowUp}
-              disabled={creatingFU}
-            >
-              {creatingFU ? "Creating..." : "Create reminder"}
+            <button className="app-button" onClick={addFollowUp}>
+              Add follow-up
             </button>
           </div>
+
+          {followUps.length === 0 ? (
+            <div className="empty-state">No follow-ups planned yet.</div>
+          ) : (
+            followUps.map((followUp) => (
+              <div key={followUp.id} className="panel-card space-y-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div>
+                    <label className="field-label" htmlFor={`follow-up-date-${followUp.id}`}>
+                      Due date
+                    </label>
+                    <input
+                      id={`follow-up-date-${followUp.id}`}
+                      className="field-input"
+                      type="date"
+                      value={followUp.dueDate}
+                      onChange={(e) => editFollowUpLocal(followUp.id, { dueDate: e.target.value })}
+                      onBlur={() => saveFollowUp(followUp.id, { dueDate: followUp.dueDate })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor={`follow-up-channel-${followUp.id}`}>
+                      Channel
+                    </label>
+                    <select
+                      id={`follow-up-channel-${followUp.id}`}
+                      className="field-select"
+                      value={followUp.channel}
+                      onChange={(e) => {
+                        editFollowUpLocal(followUp.id, { channel: e.target.value });
+                        void saveFollowUp(followUp.id, { channel: e.target.value });
+                      }}
+                    >
+                      {FOLLOW_UP_CHANNELS.map((channel) => (
+                        <option key={channel} value={channel}>
+                          {channel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor={`follow-up-recruiter-${followUp.id}`}>
+                      Recruiter
+                    </label>
+                    <select
+                      id={`follow-up-recruiter-${followUp.id}`}
+                      className="field-select"
+                      value={followUp.recruiterId ?? ""}
+                      onChange={(e) => {
+                        const recruiterId = e.target.value || null;
+                        editFollowUpLocal(followUp.id, { recruiterId });
+                        void saveFollowUp(followUp.id, { recruiterId });
+                      }}
+                    >
+                      <option value="">No recruiter</option>
+                      {recruiters.map((recruiter, index) => (
+                        <option key={recruiter.id} value={recruiter.id}>
+                          {recruiter.name || recruiter.email || `Recruiter ${index + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor={`follow-up-status-${followUp.id}`}>
+                      Status
+                    </label>
+                    <select
+                      id={`follow-up-status-${followUp.id}`}
+                      className="field-select"
+                      value={followUp.status}
+                      onChange={(e) => {
+                        editFollowUpLocal(followUp.id, { status: e.target.value });
+                        void saveFollowUp(followUp.id, { status: e.target.value });
+                      }}
+                    >
+                      {FOLLOW_UP_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="field-label" htmlFor={`follow-up-notes-${followUp.id}`}>
+                    Notes
+                  </label>
+                  <textarea
+                    id={`follow-up-notes-${followUp.id}`}
+                    className="field-textarea"
+                    value={followUp.notes ?? ""}
+                    onChange={(e) => editFollowUpLocal(followUp.id, { notes: e.target.value })}
+                    onBlur={() => saveFollowUp(followUp.id, { notes: followUp.notes ?? "" })}
+                    placeholder="What to mention, what you already sent, etc."
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {followUp.status === "sent" && followUp.sentAt ? (
+                      <span className="badge badge-offer">
+                        Sent {new Date(followUp.sentAt).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                    {followUp.hasReminder ? (
+                      <span className="badge badge-neutral">Reminder set</span>
+                    ) : (
+                      <button
+                        className="app-button-secondary"
+                        onClick={() => createFollowUpReminder(followUp)}
+                        disabled={followUpBusyId === followUp.id}
+                      >
+                        {followUpBusyId === followUp.id ? "Creating..." : "Create reminder"}
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className="app-button-ghost"
+                    onClick={() => void deleteFollowUp(followUp.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="list-card space-y-4">

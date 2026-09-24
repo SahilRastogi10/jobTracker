@@ -13,6 +13,7 @@ type StatsResponse = {
   followUps: {
     overdue: number;
     upcoming: number;
+    sent: number;
   };
 };
 
@@ -146,6 +147,11 @@ export default function StatsPage() {
               <div className="list-card">
                 <div className="mini-stat-label">Upcoming</div>
                 <div className="mini-stat-value">{stats.followUps.upcoming}</div>
+              </div>
+
+              <div className="list-card">
+                <div className="mini-stat-label">Sent</div>
+                <div className="mini-stat-value">{stats.followUps.sent}</div>
               </div>
             </div>
           </section>

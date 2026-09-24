@@ -20,10 +20,23 @@ export async function GET(req: Request) {
     where.OR = [{ company: { contains: term } }, { role: { contains: term } }];
   }
 
-  const items = await prisma.application.findMany({
+  const applications = await prisma.application.findMany({
     where,
     orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }],
+    include: {
+      followUps: {
+        where: { status: "planned" },
+        orderBy: { dueDate: "asc" },
+        take: 1,
+        select: { dueDate: true },
+      },
+    },
   });
+
+  const items = applications.map(({ followUps, ...application }) => ({
+    ...application,
+    nextFollowUpDate: followUps[0]?.dueDate ?? null,
+  }));
 
   return NextResponse.json({ items });
 }
@@ -49,7 +62,9 @@ export async function POST(req: Request) {
       stage: body.stage ? String(body.stage) : "applied",
       dateApplied: body.dateApplied ? String(body.dateApplied) : localYYYYMMDD(),
       notes: body.notes ? String(body.notes) : null,
-      followUpDate: body.followUpDate ? String(body.followUpDate) : null,
+      followUps: body.followUpDate
+        ? { create: { dueDate: String(body.followUpDate) } }
+        : undefined,
     },
   });
 

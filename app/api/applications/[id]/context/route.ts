@@ -19,12 +19,19 @@ function compactLines(values: Array<string | null | undefined>) {
   return values.map((value) => String(value ?? "").trim()).filter(Boolean);
 }
 
+type FollowUpRecord = {
+  dueDate: string;
+  channel: string;
+  status: string;
+  notes: string | null;
+};
+
 function buildProfileContent(application: {
   company: string;
   role: string;
   stage: string;
   dateApplied: string;
-  followUpDate: string | null;
+  followUps: FollowUpRecord[];
   link: string | null;
 }) {
   return [
@@ -32,7 +39,12 @@ function buildProfileContent(application: {
     `Role: ${application.role}`,
     `Stage: ${application.stage}`,
     `Applied date: ${application.dateApplied}`,
-    application.followUpDate ? `Follow-up date: ${application.followUpDate}` : null,
+    ...application.followUps.map(
+      (followUp) =>
+        `Follow-up: ${followUp.dueDate} via ${followUp.channel} (${followUp.status})${
+          followUp.notes ? ` - ${followUp.notes}` : ""
+        }`
+    ),
     application.link ? `Job link: ${application.link}` : null,
   ]
     .filter(Boolean)
@@ -70,7 +82,7 @@ async function buildDocumentPayloads(application: {
   role: string;
   stage: string;
   dateApplied: string;
-  followUpDate: string | null;
+  followUps: FollowUpRecord[];
   link: string | null;
   notes: string | null;
   recruiters: RecruiterRecord[];
@@ -231,7 +243,10 @@ export async function POST(req: Request) {
       role: true,
       stage: true,
       dateApplied: true,
-      followUpDate: true,
+      followUps: {
+        select: { dueDate: true, channel: true, status: true, notes: true },
+        orderBy: { dueDate: "asc" },
+      },
       link: true,
       notes: true,
       recruiters: {
