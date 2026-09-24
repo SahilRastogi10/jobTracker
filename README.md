@@ -45,6 +45,23 @@ Use the EN / ES switch in the sidebar to change the interface language. The choi
 
 Each draft has a **Listen** button that reads it aloud with [ElevenLabs](https://elevenlabs.io). Set `ELEVENLABS_API_KEY` in `.env` to enable it. The default multilingual model reads both English and Spanish; set `ELEVENLABS_VOICE_ID` to use a different voice. Audio is cached in the page, so replaying a draft does not use more of your quota.
 
+## Browser extension
+
+The `extension/` folder is a Chrome/Edge extension that saves applications to the tracker as you apply.
+
+- **Automatic** on Greenhouse, Lever, Ashby, Workday, and LinkedIn Easy Apply: when the page shows an application confirmation, the job is saved and a toast offers Undo.
+- **One click** everywhere else: the toolbar popup reads the company, role, and link from the page (structured job data, then the page title) for you to check and save.
+- Duplicates are skipped by job link, and a follow-up is planned 7 days out by default.
+- If the app isn't running, captures wait in the extension and are sent once it's back.
+
+Setup:
+
+1. `.env` needs `EXTENSION_TOKEN`, a long random string.
+2. Open `chrome://extensions` (or `edge://extensions`), turn on Developer mode, click **Load unpacked**, and choose the `extension/` folder.
+3. In the settings page that opens, paste the same token and click **Test connection**.
+
+The app has to be running (`pnpm dev`) at `http://localhost:3000` for captures to arrive.
+
 ## Contact research (optional)
 
 Recruiter contact research uses a Tavily-compatible search API. Set `TAVILY_API_KEY` in `.env`; Tavily's free tier is enough for personal use.

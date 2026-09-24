@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Job Tracker Capture settings</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body {
+        max-width: 520px;
+        margin: 40px auto;
+        padding: 0 16px;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        font-weight: 400;
+      }
+    </style>
+  </head>
+  <body class="stack">
+    <h1>Job Tracker Capture</h1>
+    <p class="muted">
+      Connects this extension to the Job Tracker app running on your computer.
+    </p>
+
+    <div>
+      <label for="server-url">App address</label>
+      <input id="server-url" type="url" placeholder="http://localhost:3000" />
+      <p class="muted">The extension can reach http://localhost:3000 and http://127.0.0.1:3000.</p>
+    </div>
+
+    <div>
+      <label for="token">Extension token</label>
+      <input id="token" type="password" autocomplete="off" />
+      <p class="muted">Copy EXTENSION_TOKEN from the app's .env file.</p>
+    </div>
+
+    <label class="check">
+      <input id="auto-capture" type="checkbox" />
+      <span>
+        Save automatically when I submit an application on Greenhouse, Lever, Ashby, Workday, or
+        LinkedIn Easy Apply
+      </span>
+    </label>
+
+    <div>
+      <label for="follow-up-days">Plan a follow-up this many days after applying (0 for none)</label>
+      <input id="follow-up-days" type="number" min="0" max="60" />
+    </div>
+
+    <div class="row">
+      <button id="test">Test connection</button>
+      <button id="save" class="primary">Save settings</button>
+    </div>
+    <div id="result" class="notice" hidden></div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
