@@ -162,6 +162,10 @@ export default function TodayPage() {
   const [submittingReminder, setSubmittingReminder] = useState(false);
 
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [openings, setOpenings] = useState<{
+    count: number;
+    latest: Array<{ id: string; company: string; title: string; url: string }>;
+  } | null>(null);
   const saveTimer = useRef<number | null>(null);
 
   async function loadAll() {
@@ -192,6 +196,15 @@ export default function TodayPage() {
       setLoading(false);
     }
   }
+
+  // Loaded on its own so a slow first download of the feed never holds up the agenda.
+  useEffect(() => {
+    requestJson<{ counts: { "24h": number }; items: Array<{ id: string; company: string; title: string; url: string }> }>(
+      "/api/job-feed?window=24h"
+    )
+      .then((data) => setOpenings({ count: data.counts["24h"], latest: data.items.slice(0, 3) }))
+      .catch(() => setOpenings(null));
+  }, []);
 
   useEffect(() => {
     void loadAll();
@@ -678,6 +691,37 @@ export default function TodayPage() {
               </p>
             )}
           </div>
+
+          {openings ? (
+            <div className="panel-card space-y-3">
+              <div>
+                <div className="section-title">{t("today.newOpenings")}</div>
+                <p className="section-subtitle text-sm">
+                  {t("today.newOpeningsCount", { count: openings.count })}
+                </p>
+              </div>
+              {openings.latest.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {openings.latest.map((job) => (
+                    <li key={job.id} className="min-w-0">
+                      <a
+                        className="block truncate text-sm font-semibold hover:text-[color:var(--accent)]"
+                        href={job.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {job.company}
+                      </a>
+                      <div className="section-subtitle truncate text-xs">{job.title}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <Link className="subtle-link text-sm" href="/jobs">
+                {t("today.viewFeed")}
+              </Link>
+            </div>
+          ) : null}
 
           <div className="panel-card space-y-3">
             <div className="section-title">{t("today.logApplication")}</div>

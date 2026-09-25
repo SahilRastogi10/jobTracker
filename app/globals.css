@@ -1028,3 +1028,52 @@ textarea {
 .score-ring-progress {
   transition: stroke-dashoffset 0.8s ease-out;
 }
+
+/* ---------- Job feed ---------- */
+
+.job-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-strong);
+  transition: border-color 0.15s ease;
+}
+
+.job-card:hover {
+  border-color: var(--line-strong);
+}
+
+/* Jobs already in the tracker step back so new ones stand out */
+.job-card[data-tracked="true"] {
+  background: var(--paper);
+  opacity: 0.75;
+}
+
+.filter-chip {
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.filter-chip:hover {
+  border-color: var(--ink);
+}
+
+.filter-chip[data-active="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}

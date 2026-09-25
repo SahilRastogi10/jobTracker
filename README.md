@@ -15,6 +15,12 @@ Everything runs on your own machine. The AI features use local [Ollama](https://
 - **Stats**: applications by stage, follow-up health, reminder load, and how many assistant drafts passed review.
 - **CSV export** of all applications with their recruiters and follow-ups.
 
+**Job feed**
+
+- New-grad openings from [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions), downloaded when the app starts and refreshed every 30 minutes.
+- Switch between the last 24 hours and the last 7 days, search by company, role, or location, and filter by category.
+- Each opening links to the posting, runs **Check match** against your resume, or is **logged as applied** with a follow-up planned. Openings already in your tracker are marked, and the Today page shows how many were posted in the last day.
+
 **Resume match**
 
 - Save several resume versions (upload a PDF or paste the text) and compare any of them with a job description, given as a link or pasted text.
@@ -106,6 +112,7 @@ All settings live in `.env`. See `.env.example` for the full list.
 app/                  Pages and API routes
   api/                Applications, follow-ups, recruiters, reminders, drafts, calendar, stats
   applications/       Pipeline and application detail pages
+  jobs/               New-grad job feed
   match/              Resume versions and keyword matching
   calendar/           Month view with the day panel
 src/components/       App shell, assistant review queue, language provider, stage picker
@@ -116,4 +123,4 @@ extension/            Chrome/Edge extension
 
 ## Privacy
 
-The database, your resumes, the AI models, and the extension's queue all stay on your machine. The app only reaches outside for job postings you ask it to read (during sync or resume match), the PDF reader library (pdf.js, loaded from the jsDelivr CDN; your file is read locally in the browser), and the optional services you configure: Tavily for contact research and ElevenLabs for Listen.
+The database, your resumes, the AI models, and the extension's queue all stay on your machine. The app only reaches outside for the public SimplifyJobs listings on GitHub, job postings you ask it to read (during sync or resume match), the PDF reader library (pdf.js, loaded from the jsDelivr CDN; your file is read locally in the browser), and the optional services you configure: Tavily for contact research and ElevenLabs for Listen.
