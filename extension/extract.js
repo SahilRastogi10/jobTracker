@@ -116,9 +116,12 @@ globalThis.jobTrackerExtract = function jobTrackerExtract() {
 
   const sources = [fromJsonLd(), fromSite(), fromPageTitle()];
   const pick = (field) => sources.map((source) => source[field]).find(Boolean) || "";
+  // Logo alt text reads like "EQ Bank | Canada's Challenger Bank logo".
+  const cleanCompany = (value) =>
+    clean(value.replace(/\s*logo$/i, "").split(/\s+[|–—-]\s+/)[0]);
 
   return {
-    company: pick("company").slice(0, 120),
+    company: cleanCompany(pick("company")).slice(0, 120),
     role: pick("role").slice(0, 160),
     link: canonicalLink(),
     source: host,

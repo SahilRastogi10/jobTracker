@@ -1,65 +1,94 @@
-// Auto-capture on supported job boards: remember the job while you read it, then save it
-// when the page shows an application confirmation.
+// Auto-capture on supported job boards. A job is saved only after you submit an application:
+// clicking a Submit button (or submitting a form) arms the tab, and a confirmation message that
+// appears afterwards, on the same page or the next one, triggers the save. Job pages often
+// contain "Thank you for applying" or "Thank you for your interest" already, so the phrase alone
+// is never enough.
 
 (() => {
   if (globalThis.jobTrackerContentLoaded) return;
   globalThis.jobTrackerContentLoaded = true;
 
   const CONFIRMATION =
-    /thank(s| you)\b[^.]{0,40}\b(for applying|for your application|for your interest)|application (was |has been )?(submitted|received|sent)|we('ve| have) received your application|your application (was|has been) sent/i;
+    /thank(s| you)\b[^.!]{0,40}\bfor (applying|your application|submitting)|application (was |has been )?(successfully |now )?(submitted|received|sent|complete)|successfully (submitted|applied)|we('ve| have) (successfully )?received your application|your application (was|has been) (sent|submitted|received)|you('ve| have) (successfully )?applied/gi;
+  const SUBMIT_BUTTON = /\b(submit|send application|finish application|complete application)\b/i;
+  const ARM_WINDOW_MS = 5 * 60 * 1000;
   const isLinkedIn = location.hostname.endsWith("linkedin.com");
 
   let captured = false;
   let lastJob = null;
   let lastUrl = location.href;
   let scanTimer = null;
+  // Confirmation phrases already on the page when the tab was armed on this page.
+  let armedHere = null;
+  let armedPoll = null;
 
-  function isUsable(job) {
-    return job && job.company && job.role && !CONFIRMATION.test(job.role);
+  function send(message) {
+    return chrome.runtime.sendMessage(message).catch(() => null);
   }
 
-  function rememberJob() {
-    const job = globalThis.jobTrackerExtract();
-    if (!isUsable(job)) return;
-    lastJob = job;
-    chrome.runtime.sendMessage({ type: "remember-job", job }).catch(() => {});
+  function isUsable(job) {
+    return job && job.company && job.role && !new RegExp(CONFIRMATION.source, "i").test(job.role);
   }
 
   // LinkedIn job pages say "Application submitted" for jobs applied to earlier,
   // so only the Easy Apply dialog counts there.
   function confirmationText() {
     if (isLinkedIn) {
-      return [...document.querySelectorAll('[role="dialog"]')]
-        .map((dialog) => dialog.innerText)
-        .join("\n");
+      return [...document.querySelectorAll('[role="dialog"]')].map((dialog) => dialog.innerText).join("\n");
     }
-    return (document.body?.innerText || "").slice(0, 20000);
+    // The whole page: confirmations on long Greenhouse pages appear below the description and form.
+    return document.body?.innerText || "";
+  }
+
+  function confirmationCount() {
+    return (confirmationText().match(CONFIRMATION) || []).length;
+  }
+
+  function rememberJob() {
+    const job = globalThis.jobTrackerExtract();
+    if (!isUsable(job)) return;
+    lastJob = job;
+    void send({ type: "remember-job", job });
+  }
+
+  function arm() {
+    if (captured) return;
+    rememberJob();
+    armedHere = { count: confirmationCount(), at: Date.now() };
+    void send({ type: "arm", url: location.href, job: lastJob });
+    scheduleScan();
+    // Some boards replace the whole page when submitting, which can leave the mutation
+    // observer watching detached nodes, so also check every second while armed.
+    clearInterval(armedPoll);
+    armedPoll = setInterval(() => {
+      if (captured || !armedHere || Date.now() - armedHere.at > ARM_WINDOW_MS) {
+        clearInterval(armedPoll);
+        return;
+      }
+      scheduleScan();
+    }, 1000);
   }
 
   async function capture() {
     if (captured) return;
     captured = true;
+    armedHere = null;
 
-    // Confirmation pages often drop the job details, so prefer what was seen earlier.
-    const remembered = await chrome.runtime
-      .sendMessage({ type: "get-remembered-job" })
-      .catch(() => null);
-    const current = globalThis.jobTrackerExtract();
-    const job = [lastJob, remembered, current].find(isUsable);
+    // Confirmation pages often drop the job details, so prefer what was seen before submitting.
+    const armed = await send({ type: "take-armed" });
+    const remembered = await send({ type: "get-remembered-job" });
+    const job = [lastJob, armed?.job, remembered, globalThis.jobTrackerExtract()].find(isUsable);
 
     if (!job) {
       showToast({ status: "error", error: "Couldn't read the company and role. Use the extension button to save it." });
       return;
     }
 
-    const result = await chrome.runtime
-      .sendMessage({ type: "capture", job, auto: true })
-      .catch((error) => ({ status: "error", error: String(error) }));
-
-    if (result?.status !== "disabled") showToast(result, job);
+    const result = await send({ type: "capture", job, auto: true });
+    if (result?.status !== "disabled") showToast(result ?? { status: "error" }, job);
   }
 
-  function scan() {
+  async function scan() {
     scanTimer = null;
 
     if (location.href !== lastUrl) {
@@ -67,12 +96,14 @@
       lastUrl = location.href;
       captured = false;
     }
+    if (captured) return;
 
-    if (!captured && CONFIRMATION.test(confirmationText())) {
+    // Same page: a new confirmation appeared after the submit click.
+    if (armedHere && Date.now() - armedHere.at < ARM_WINDOW_MS && confirmationCount() > armedHere.count) {
       void capture();
-    } else if (!captured) {
-      rememberJob();
+      return;
     }
+    if (!armedHere) rememberJob();
   }
 
   function scheduleScan() {
@@ -114,7 +145,7 @@
     shadow.querySelector(".message").textContent = messages[result?.status] || messages.error;
 
     shadow.querySelector(".undo")?.addEventListener("click", async () => {
-      await chrome.runtime.sendMessage({ type: "undo", id: result.item.id }).catch(() => {});
+      await send({ type: "undo", id: result.item.id });
       shadow.querySelector(".message").textContent = "Removed from Job Tracker.";
       shadow.querySelector(".undo")?.remove();
     });
@@ -124,10 +155,44 @@
     setTimeout(() => host.remove(), 10000);
   }
 
-  new MutationObserver(scheduleScan).observe(document.documentElement, {
+  // Arm on the actual submission: a form submit, or a click on a Submit-style button
+  // (many boards submit with JavaScript rather than a real form).
+  document.addEventListener("submit", arm, true);
+  document.addEventListener(
+    "click",
+    (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest('button, input[type="submit"], [role="button"]')
+        : null;
+      const label = button ? (button.innerText || button.value || button.getAttribute("aria-label") || "") : "";
+      if (label && SUBMIT_BUTTON.test(label)) arm();
+    },
+    true
+  );
+
+  // Observe the document itself so a replaced <html> or <body> is still covered.
+  new MutationObserver(scheduleScan).observe(document, {
     childList: true,
     subtree: true,
     characterData: true,
   });
-  scan();
+
+  // Next page: if this tab was armed on the previous page (Greenhouse and Lever navigate to a
+  // confirmation page after submitting), a confirmation here means the application went through.
+  (async () => {
+    const armed = await send({ type: "peek-armed" });
+    if (armed && armed.url !== location.href) {
+      // Give client-rendered confirmation pages a moment to show their message.
+      for (let attempt = 0; attempt < 10 && !captured; attempt += 1) {
+        if (confirmationCount() > 0) {
+          void capture();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+      // Not a confirmation page, so the submission didn't complete; don't carry the arm further.
+      void send({ type: "take-armed" });
+    }
+    scan();
+  })();
 })();

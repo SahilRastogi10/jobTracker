@@ -120,7 +120,39 @@ async function flushQueue() {
   return remaining.length;
 }
 
+// A submit click arms the frame it happened in; the confirmation may show up on the next page
+// that frame loads (frame ids stay the same across navigations), so the state lives here.
+const ARM_TTL_MS = 5 * 60 * 1000;
+
+function armKey(sender) {
+  return sender.tab?.id === undefined ? null : `armed:${sender.tab.id}:${sender.frameId ?? 0}`;
+}
+
+async function readArmed(sender) {
+  const key = armKey(sender);
+  if (!key) return null;
+  const armed = (await chrome.storage.session.get(key))[key];
+  if (!armed || Date.now() - armed.at > ARM_TTL_MS) return null;
+  return armed;
+}
+
 const handlers = {
+  arm: async (message, sender) => {
+    const key = armKey(sender);
+    if (key) {
+      await chrome.storage.session.set({
+        [key]: { url: message.url, job: message.job ?? null, at: Date.now() },
+      });
+    }
+    return true;
+  },
+  "peek-armed": (message, sender) => readArmed(sender),
+  "take-armed": async (message, sender) => {
+    const armed = await readArmed(sender);
+    const key = armKey(sender);
+    if (key) await chrome.storage.session.remove(key);
+    return armed;
+  },
   "remember-job": async (message, sender) => {
     if (sender.tab?.id !== undefined) {
       await chrome.storage.session.set({ [`job:${sender.tab.id}`]: message.job });
@@ -172,8 +204,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // keep the channel open for the async response
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-  void chrome.storage.session.remove(`job:${tabId}`);
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const stored = await chrome.storage.session.get(null);
+  const keys = Object.keys(stored).filter(
+    (key) => key === `job:${tabId}` || key.startsWith(`armed:${tabId}:`)
+  );
+  await chrome.storage.session.remove(keys);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
