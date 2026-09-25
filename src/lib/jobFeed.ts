@@ -1,104 +1,136 @@
-// New-grad openings from the SimplifyJobs/New-Grad-Positions repository. The repo publishes
-// every listing as structured JSON next to its README, which is sturdier than parsing the table.
+// New-grad openings in the US and Canada from several free sources, merged so the same job
+// found in two places shows up once with both sources listed.
 
-const LISTINGS_URL =
-  "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json";
-export const JOB_FEED_SOURCE = "https://github.com/SimplifyJobs/New-Grad-Positions";
+import { fetchCompanyBoards } from "@/lib/jobSources/companyBoards";
+import { mergeDuplicates } from "@/lib/jobSources/dedupe";
+import { inUsOrCanada } from "@/lib/jobSources/filters";
+import { fetchSimplify, fetchSpeedyApply } from "@/lib/jobSources/githubLists";
+import { fetchJSearch, jsearchEnabled } from "@/lib/jobSources/jsearch";
+import type { FeedJob, SourceResult } from "@/lib/jobSources/types";
 
-const CACHE_TTL_MS = 30 * 60 * 1000;
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export type { FeedJob } from "@/lib/jobSources/types";
 
-type RawListing = {
-  id: string;
-  company_name?: string;
-  title?: string;
-  url?: string;
-  locations?: string[];
-  category?: string;
-  sponsorship?: string;
-  degrees?: string[];
-  date_posted?: number;
-  active?: boolean;
-  is_visible?: boolean;
-};
+const MINUTE = 60 * 1000;
+const MAX_AGE_MS = 7 * 24 * 60 * MINUTE;
 
-export type FeedJob = {
-  id: string;
-  company: string;
-  title: string;
+type Source = {
+  name: string;
   url: string;
-  locations: string[];
-  category: string;
-  sponsorship: string | null;
-  degrees: string[];
-  postedAt: number; // epoch milliseconds
+  // How long a download stays fresh. Company boards are several MB each, and JSearch's
+  // free tier allows about 200 requests a month.
+  ttl: number;
+  enabled: () => boolean;
+  load: (cutoff: number) => Promise<SourceResult>;
 };
 
-type FeedCache = { jobs: FeedJob[]; fetchedAt: number };
+// Listed from most to least detailed; merged duplicates keep the first source's fields.
+const SOURCES: Source[] = [
+  {
+    name: "Simplify",
+    url: "https://github.com/SimplifyJobs/New-Grad-Positions",
+    ttl: 30 * MINUTE,
+    enabled: () => true,
+    load: fetchSimplify,
+  },
+  {
+    name: "speedyapply",
+    url: "https://github.com/speedyapply/2026-SWE-College-Jobs",
+    ttl: 30 * MINUTE,
+    enabled: () => true,
+    load: fetchSpeedyApply,
+  },
+  {
+    name: "Company boards",
+    url: "https://developers.greenhouse.io/job-board.html",
+    ttl: 2 * 60 * MINUTE,
+    enabled: () => true,
+    load: fetchCompanyBoards,
+  },
+  {
+    name: "LinkedIn / Indeed (JSearch)",
+    url: "https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch",
+    ttl: 12 * 60 * MINUTE,
+    enabled: jsearchEnabled,
+    load: fetchJSearch,
+  },
+];
 
-// Kept on globalThis so the dev server's hot reloads don't throw the cache away.
+type SourceCache = { jobs: FeedJob[]; fetchedAt: number; error?: string };
+
+export type SourceStatus = {
+  name: string;
+  url: string;
+  count: number;
+  fetchedAt: number | null;
+  error?: string;
+};
+
+// Kept on globalThis so the dev server's hot reloads don't throw the caches away.
 const store = globalThis as typeof globalThis & {
-  jobFeedCache?: FeedCache;
-  jobFeedLoading?: Promise<FeedCache>;
+  jobSourceCache?: Map<string, SourceCache>;
+  jobSourceLoading?: Map<string, Promise<SourceCache>>;
 };
+store.jobSourceCache ??= new Map();
+store.jobSourceLoading ??= new Map();
 
-async function download(): Promise<FeedCache> {
-  const res = await fetch(LISTINGS_URL, {
-    cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`GitHub returned status ${res.status} for the job listings.`);
+async function loadSource(source: Source, refresh: boolean): Promise<SourceCache> {
+  const cache = store.jobSourceCache!;
+  const loading = store.jobSourceLoading!;
+  const cached = cache.get(source.name);
+  if (!refresh && cached && Date.now() - cached.fetchedAt < source.ttl) return cached;
 
-  const listings = (await res.json()) as RawListing[];
-  const cutoff = Date.now() - MAX_AGE_MS;
-
-  // The file holds every listing ever posted (about 20,000); keep only live ones from the last week.
-  const jobs = listings
-    .filter(
-      (item) =>
-        item.active &&
-        item.is_visible !== false &&
-        item.url &&
-        item.company_name &&
-        item.title &&
-        (item.date_posted ?? 0) * 1000 >= cutoff
-    )
-    .map((item) => ({
-      id: item.id,
-      company: item.company_name!.trim(),
-      title: item.title!.trim(),
-      url: item.url!,
-      locations: item.locations ?? [],
-      category: item.category ?? "Other",
-      // "Other" means the listing doesn't say, which isn't worth showing.
-      sponsorship: item.sponsorship && item.sponsorship !== "Other" ? item.sponsorship : null,
-      degrees: item.degrees ?? [],
-      postedAt: item.date_posted! * 1000,
-    }))
-    .sort((a, b) => b.postedAt - a.postedAt);
-
-  return { jobs, fetchedAt: Date.now() };
+  // Share one download between requests that arrive while it's in flight.
+  let pending = loading.get(source.name);
+  if (!pending) {
+    pending = source
+      .load(Date.now() - MAX_AGE_MS)
+      .then((result) => {
+        const entry = {
+          jobs: result.jobs.filter((job) => inUsOrCanada(job.locations)),
+          fetchedAt: Date.now(),
+          error: result.error,
+        };
+        cache.set(source.name, entry);
+        return entry;
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Couldn't load this source.";
+        // Keep serving the last good copy, but report the failure.
+        const entry = cached
+          ? { ...cached, error: message }
+          : { jobs: [], fetchedAt: Date.now(), error: message };
+        cache.set(source.name, entry);
+        return entry;
+      })
+      .finally(() => loading.delete(source.name));
+    loading.set(source.name, pending);
+  }
+  return pending;
 }
 
 export async function getJobFeed(options: { refresh?: boolean } = {}) {
-  const cached = store.jobFeedCache;
-  if (!options.refresh && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached;
+  const active = SOURCES.filter((source) => source.enabled());
+  const results = await Promise.all(
+    active.map((source) => loadSource(source, Boolean(options.refresh)))
+  );
 
-  // Share one download between requests that arrive while it's in flight.
-  store.jobFeedLoading ??= download()
-    .then((result) => {
-      store.jobFeedCache = result;
-      return result;
-    })
-    .finally(() => {
-      store.jobFeedLoading = undefined;
-    });
+  const cutoff = Date.now() - MAX_AGE_MS;
+  const jobs = mergeDuplicates(results.flatMap((result) => result.jobs))
+    .filter((job) => job.postedAt >= cutoff)
+    .sort((a, b) => b.postedAt - a.postedAt);
 
-  try {
-    return await store.jobFeedLoading;
-  } catch (error) {
-    // Serve the last good copy if GitHub is unreachable.
-    if (cached) return cached;
-    throw error;
-  }
+  const sources: SourceStatus[] = active.map((source, index) => ({
+    name: source.name,
+    url: source.url,
+    count: results[index].jobs.length,
+    fetchedAt: results[index].fetchedAt,
+    error: results[index].error,
+  }));
+
+  return {
+    jobs,
+    sources,
+    fetchedAt: Math.min(...results.map((result) => result.fetchedAt)),
+    jsearchAvailable: jsearchEnabled(),
+  };
 }

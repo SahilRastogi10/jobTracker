@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeJobUrl } from "@/lib/extension";
-import { getJobFeed, JOB_FEED_SOURCE } from "@/lib/jobFeed";
+import { getJobFeed } from "@/lib/jobFeed";
 
 const WINDOWS = { "24h": 24 * 60 * 60 * 1000, "7d": 7 * 24 * 60 * 60 * 1000 } as const;
 
@@ -13,13 +13,8 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const window = searchParams.get("window") === "24h" ? "24h" : "7d";
 
-  let feed;
-  try {
-    feed = await getJobFeed({ refresh: searchParams.get("refresh") === "1" });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Couldn't load job openings.";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+  // Each source reports its own errors, so one failing never blocks the others.
+  const feed = await getJobFeed({ refresh: searchParams.get("refresh") === "1" });
 
   const cutoff = Date.now() - WINDOWS[window];
   const jobs = feed.jobs.filter((job) => job.postedAt >= cutoff);
@@ -52,6 +47,7 @@ export async function GET(req: Request) {
       "24h": feed.jobs.filter((job) => job.postedAt >= Date.now() - WINDOWS["24h"]).length,
       "7d": feed.jobs.filter((job) => job.postedAt >= Date.now() - WINDOWS["7d"]).length,
     },
-    source: JOB_FEED_SOURCE,
+    sources: feed.sources,
+    jsearchAvailable: feed.jsearchAvailable,
   });
 }

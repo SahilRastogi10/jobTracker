@@ -17,9 +17,12 @@ Everything runs on your own machine. The AI features use local [Ollama](https://
 
 **Job feed**
 
-- New-grad openings from [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions), downloaded when the app starts and refreshed every 30 minutes.
-- Switch between the last 24 hours and the last 7 days, search by company, role, or location, and filter by category.
-- Each opening links to the posting, runs **Check match** against your resume, or is **logged as applied** with a follow-up planned. Openings already in your tracker are marked, and the Today page shows how many were posted in the last day.
+- New-grad openings in the **US and Canada** from several free sources, downloaded when the app starts:
+  - [SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions) and [speedyapply/2026-SWE-College-Jobs](https://github.com/speedyapply/2026-SWE-College-Jobs) (community lists, with salaries where given)
+  - Public Greenhouse, Lever, and Ashby job boards of 56 tech companies, filtered to entry-level technical roles
+  - Optionally LinkedIn, Indeed, and Google Jobs through [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) with a free `JSEARCH_API_KEY`
+- **No duplicates:** the same job found on several sources is merged into one entry that lists every source, matched by its applicant-tracking-system job ID, its link, or its company and title.
+- Switch between the last 24 hours and the last 7 days, search, and filter by category or source. Each opening links to the posting, runs **Check match** against your resume, or is **logged as applied** with a follow-up planned. Openings already in your tracker are marked, and the Today page shows how many were posted in the last day.
 
 **Resume match**
 
@@ -105,6 +108,7 @@ All settings live in `.env`. See `.env.example` for the full list.
 | `TAVILY_API_KEY` | For contact research | Search API key; the free tier is enough |
 | `ELEVENLABS_API_KEY` | For Listen | Text to speech key |
 | `ELEVENLABS_VOICE_ID` | No | Voice to use instead of the default |
+| `JSEARCH_API_KEY` | No | Adds LinkedIn, Indeed, and Google Jobs to the job feed (RapidAPI free tier) |
 
 ## Project structure
 
@@ -123,4 +127,4 @@ extension/            Chrome/Edge extension
 
 ## Privacy
 
-The database, your resumes, the AI models, and the extension's queue all stay on your machine. The app only reaches outside for the public SimplifyJobs listings on GitHub, job postings you ask it to read (during sync or resume match), the PDF reader library (pdf.js, loaded from the jsDelivr CDN; your file is read locally in the browser), and the optional services you configure: Tavily for contact research and ElevenLabs for Listen.
+The database, your resumes, the AI models, and the extension's queue all stay on your machine. The app only reaches outside for public job listings (the GitHub lists and company job boards), job postings you ask it to read (during sync or resume match), the PDF reader library (pdf.js, loaded from the jsDelivr CDN; your file is read locally in the browser), and the optional services you configure: Tavily for contact research and ElevenLabs for Listen.

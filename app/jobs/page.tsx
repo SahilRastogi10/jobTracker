@@ -16,15 +16,26 @@ type Job = {
   category: string;
   sponsorship: string | null;
   degrees: string[];
+  salary: string | null;
   postedAt: number;
+  postedApprox: boolean;
+  sources: string[];
   applicationId: string | null;
+};
+
+type SourceStatus = {
+  name: string;
+  url: string;
+  count: number;
+  error?: string;
 };
 
 type FeedResponse = {
   items: Job[];
   fetchedAt: number;
   counts: { "24h": number; "7d": number };
-  source: string;
+  sources: SourceStatus[];
+  jsearchAvailable: boolean;
 };
 
 type FeedWindow = "24h" | "7d";
@@ -55,6 +66,7 @@ export default function JobFeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [hideTracked, setHideTracked] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -84,7 +96,12 @@ export default function JobFeedPage() {
 
   const relative = useMemo(() => new Intl.RelativeTimeFormat(dateLocale, { numeric: "auto" }), [dateLocale]);
 
-  function timeAgo(timestamp: number) {
+  function timeAgo(timestamp: number, approximate = false) {
+    // Sources that only give a day count can't say "3 hours ago".
+    if (approximate) {
+      const days = Math.floor((Date.now() - timestamp) / 86_400_000);
+      return relative.format(-days, "day");
+    }
     const minutes = Math.round((timestamp - Date.now()) / 60000);
     if (Math.abs(minutes) < 60) return relative.format(minutes, "minute");
     const hours = Math.round(minutes / 60);
@@ -96,17 +113,23 @@ export default function JobFeedPage() {
     () => [...new Set((feed?.items ?? []).map((job) => job.category))].sort(),
     [feed]
   );
+  // Individual sites (a JSearch result may say "LinkedIn" or "Indeed"), for the source filter.
+  const sourceNames = useMemo(
+    () => [...new Set((feed?.items ?? []).flatMap((job) => job.sources))].sort(),
+    [feed]
+  );
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (feed?.items ?? []).filter(
       (job) =>
         (!category || job.category === category) &&
+        (!sourceFilter || job.sources.includes(sourceFilter)) &&
         (!hideTracked || !job.applicationId) &&
         (!needle ||
           `${job.company} ${job.title} ${job.locations.join(" ")}`.toLowerCase().includes(needle))
     );
-  }, [feed, query, category, hideTracked]);
+  }, [feed, query, category, sourceFilter, hideTracked]);
 
   // Grouped by the local day each opening was posted, newest first.
   const groups = useMemo(() => {
@@ -215,6 +238,20 @@ export default function JobFeedPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+
+          <select
+            className="field-select !w-auto"
+            aria-label={t("jobs.sourceFilter")}
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+          >
+            <option value="">{t("jobs.allSources")}</option>
+            {sourceNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -248,11 +285,34 @@ export default function JobFeedPage() {
           {visible.length === 1 ? t("jobs.showingOne") : t("jobs.showing", { count: visible.length })}
         </div>
         {feed ? (
-          <a className="subtle-link text-xs" href={feed.source} target="_blank" rel="noreferrer">
-            {t("jobs.source")}: SimplifyJobs/New-Grad-Positions
-          </a>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="section-subtitle">{t("jobs.sources")}:</span>
+            {feed.sources.map((source) => (
+              <a
+                key={source.name}
+                className="subtle-link"
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                title={source.error}
+              >
+                {source.name} ({source.count}){source.error ? " !" : ""}
+              </a>
+            ))}
+          </div>
         ) : null}
       </div>
+
+      {feed?.sources
+        .filter((source) => source.error)
+        .map((source) => (
+          <div key={source.name} className="error-banner text-sm">
+            {t("jobs.sourceFailed", { name: source.name, error: source.error ?? "" })}
+          </div>
+        ))}
+      {feed && !feed.jsearchAvailable ? (
+        <p className="section-subtitle text-xs">{t("jobs.jsearchHint")}</p>
+      ) : null}
 
       {loading ? (
         <div className="empty-state">{t("jobs.loading")}</div>
@@ -275,7 +335,9 @@ export default function JobFeedPage() {
                     <div className="min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-baseline gap-x-2">
                         <span className="font-semibold">{job.company}</span>
-                        <span className="section-subtitle text-xs">{timeAgo(job.postedAt)}</span>
+                        <span className="section-subtitle text-xs">
+                          {timeAgo(job.postedAt, job.postedApprox)}
+                        </span>
                       </div>
                       <div className="font-display text-lg leading-snug">{job.title}</div>
                       <div className="section-subtitle text-sm">
@@ -291,6 +353,7 @@ export default function JobFeedPage() {
                             {tValue("jobs.degree", degree)}
                           </span>
                         ))}
+                        {job.salary ? <span className="badge badge-offer">{job.salary}</span> : null}
                         {job.sponsorship ? (
                           <span
                             className={
@@ -302,6 +365,9 @@ export default function JobFeedPage() {
                             {tValue("jobs.sponsorship", job.sponsorship)}
                           </span>
                         ) : null}
+                      </div>
+                      <div className="section-subtitle text-xs">
+                        {t("jobs.foundOn")}: {job.sources.join(" | ")}
                       </div>
                     </div>
 
