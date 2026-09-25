@@ -22,6 +22,7 @@ Everything runs on your own machine. The AI features use local [Ollama](https://
   - Public Greenhouse, Lever, and Ashby job boards of 56 tech companies, filtered to entry-level technical roles
   - Optionally LinkedIn, Indeed, and Google Jobs through [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) with a free `JSEARCH_API_KEY`
 - **No duplicates:** the same job found on several sources is merged into one entry that lists every source, matched by its applicant-tracking-system job ID, its link, or its company and title.
+- **Salary for each opening:** the pay range stated in the posting when there is one (read from the posting page, or from Workday, Greenhouse, Lever, and Ashby data), otherwise an entry-level estimate from [Levels.fyi](https://www.levels.fyi): the median total compensation at the company's entry level for that job family, linked to its source. Lookups run in the background and are cached for two weeks.
 - Switch between the last 24 hours and the last 7 days, search, and filter by category or source. Each opening links to the posting, runs **Check match** against your resume, or is **logged as applied** with a follow-up planned. Openings already in your tracker are marked, and the Today page shows how many were posted in the last day.
 
 **Resume match**

@@ -4,8 +4,12 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   const { getJobFeed } = await import("@/lib/jobFeed");
+  const { attachSalaries } = await import("@/lib/salary/enrich");
   getJobFeed()
-    .then(({ jobs, sources }) => {
+    .then(async ({ jobs, sources }) => {
+      // Start the background salary lookups so they're ready when the page opens.
+      const { pending } = await attachSalaries(jobs);
+      if (pending > 0) console.log(`Job feed: looking up ${pending} salaries in the background.`);
       const perSource = sources
         .map((source) => `${source.name} ${source.error && !source.count ? "failed" : source.count}`)
         .join(", ");

@@ -35,6 +35,7 @@ type Candidate = {
   url: string;
   locations: string[];
   postedAt: number;
+  salary?: string | null;
 };
 
 async function getJson<T>(url: string): Promise<T> {
@@ -95,8 +96,11 @@ async function ashby(board: string): Promise<Candidate[]> {
     address?: { postalAddress?: { addressCountry?: string } };
     publishedAt?: string;
     isListed?: boolean;
+    compensation?: { compensationTierSummary?: string };
   };
-  const data = await getJson<{ jobs: Job[] }>(`https://api.ashbyhq.com/posting-api/job-board/${board}`);
+  const data = await getJson<{ jobs: Job[] }>(
+    `https://api.ashbyhq.com/posting-api/job-board/${board}?includeCompensation=true`
+  );
   return data.jobs
     .filter((job) => job.isListed !== false)
     .map((job) => ({
@@ -109,6 +113,7 @@ async function ashby(board: string): Promise<Candidate[]> {
         job.address?.postalAddress?.addressCountry ?? "",
       ].filter(Boolean),
       postedAt: Date.parse(job.publishedAt ?? ""),
+      salary: job.compensation?.compensationTierSummary ?? null,
     }));
 }
 
@@ -154,7 +159,7 @@ export async function fetchCompanyBoards(cutoff: number): Promise<SourceResult> 
           category: inferCategory(job.title),
           sponsorship: null,
           degrees: [],
-          salary: null,
+          salary: job.salary ?? null,
           postedAt: job.postedAt,
           postedApprox: false,
           sources: ["Company boards"],

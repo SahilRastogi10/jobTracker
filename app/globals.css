@@ -1077,3 +1077,25 @@ textarea {
   background: var(--ink);
   color: var(--paper);
 }
+
+/* Salary line under each job-feed opening */
+.salary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.salary-amount {
+  color: var(--stage-offer);
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Estimates are softer than salaries stated in the posting */
+.salary-line[data-kind="estimate"] .salary-amount {
+  color: var(--stage-applied);
+}

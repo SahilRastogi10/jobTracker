@@ -114,6 +114,14 @@ model Resume {
   isDefault Boolean  @default(false)
 }
 
+// Salary lookups for job-feed postings and Levels.fyi estimates, cached so restarting the
+// app doesn't fetch hundreds of pages again. value is JSON; an empty result is cached too.
+model SalaryCache {
+  key       String   @id
+  value     String
+  fetchedAt DateTime @default(now())
+}
+
 model DailyGoal {
   id          String @id @default(cuid())
   date        String @unique // YYYY-MM-DD

@@ -21,6 +21,11 @@ type Job = {
   postedApprox: boolean;
   sources: string[];
   applicationId: string | null;
+  salaryInfo:
+    | { kind: "posting"; text: string }
+    | { kind: "estimate"; median: number; level: string; url: string }
+    | { kind: "pending" }
+    | { kind: "none" };
 };
 
 type SourceStatus = {
@@ -36,6 +41,7 @@ type FeedResponse = {
   counts: { "24h": number; "7d": number };
   sources: SourceStatus[];
   jsearchAvailable: boolean;
+  salaryPending: number;
 };
 
 type FeedWindow = "24h" | "7d";
@@ -70,9 +76,9 @@ export default function JobFeedPage() {
   const [hideTracked, setHideTracked] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function load(nextWindow: FeedWindow, refresh = false) {
+  async function load(nextWindow: FeedWindow, refresh = false, quiet = false) {
     if (refresh) setRefreshing(true);
-    else setLoading(true);
+    else if (!quiet) setLoading(true);
     setError(null);
 
     try {
@@ -93,6 +99,19 @@ export default function JobFeedPage() {
     // Reload on window changes only; switching language needs no refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedWindow]);
+
+  // Salaries are looked up in the background; refresh quietly until they're in.
+  const salaryPending = feed?.salaryPending ?? 0;
+  useEffect(() => {
+    if (salaryPending === 0) return;
+    const timer = window.setTimeout(() => void load(feedWindow, false, true), 20_000);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed]);
+
+  function formatK(value: number) {
+    return `$${Math.round(value / 1000)}K`;
+  }
 
   const relative = useMemo(() => new Intl.RelativeTimeFormat(dateLocale, { numeric: "auto" }), [dateLocale]);
 
@@ -353,7 +372,6 @@ export default function JobFeedPage() {
                             {tValue("jobs.degree", degree)}
                           </span>
                         ))}
-                        {job.salary ? <span className="badge badge-offer">{job.salary}</span> : null}
                         {job.sponsorship ? (
                           <span
                             className={
@@ -365,6 +383,36 @@ export default function JobFeedPage() {
                             {tValue("jobs.sponsorship", job.sponsorship)}
                           </span>
                         ) : null}
+                      </div>
+                      <div className="salary-line" data-kind={job.salaryInfo.kind}>
+                        {job.salaryInfo.kind === "posting" ? (
+                          <>
+                            <span className="salary-amount">{job.salaryInfo.text}</span>
+                            <span>{t("jobs.salaryFromPosting")}</span>
+                          </>
+                        ) : job.salaryInfo.kind === "estimate" ? (
+                          <>
+                            <span className="salary-amount">
+                              {t("jobs.salaryEstimate", { amount: formatK(job.salaryInfo.median) })}
+                            </span>
+                            <span>
+                              {t("jobs.salaryEstimateDetail")}{" "}
+                              <a
+                                className="subtle-link text-xs"
+                                href={job.salaryInfo.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={t("jobs.salaryEstimateLevel", { level: job.salaryInfo.level })}
+                              >
+                                Levels.fyi
+                              </a>
+                            </span>
+                          </>
+                        ) : job.salaryInfo.kind === "pending" ? (
+                          <span>{t("jobs.salaryPending")}</span>
+                        ) : (
+                          <span>{t("jobs.salaryNone")}</span>
+                        )}
                       </div>
                       <div className="section-subtitle text-xs">
                         {t("jobs.foundOn")}: {job.sources.join(" | ")}

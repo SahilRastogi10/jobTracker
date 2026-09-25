@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeJobUrl } from "@/lib/extension";
 import { getJobFeed } from "@/lib/jobFeed";
+import { attachSalaries } from "@/lib/salary/enrich";
 
 const WINDOWS = { "24h": 24 * 60 * 60 * 1000, "7d": 7 * 24 * 60 * 60 * 1000 } as const;
 
@@ -31,8 +32,12 @@ export async function GET(req: Request) {
     byCompanyRole.set(`${application.company}|${application.role}`.toLowerCase(), application.id);
   }
 
+  // Known salaries come from the cache; unknown ones are looked up in the background.
+  const { salaries, pending: salaryPending } = await attachSalaries(jobs);
+
   const items = jobs.map((job) => ({
     ...job,
+    salaryInfo: salaries.get(job.id) ?? { kind: "none" },
     applicationId:
       byLink.get(normalizeJobUrl(job.url) ?? "") ??
       byCompanyRole.get(`${job.company}|${job.title}`.toLowerCase()) ??
@@ -48,6 +53,7 @@ export async function GET(req: Request) {
       "7d": feed.jobs.filter((job) => job.postedAt >= Date.now() - WINDOWS["7d"]).length,
     },
     sources: feed.sources,
+    salaryPending,
     jsearchAvailable: feed.jsearchAvailable,
   });
 }
